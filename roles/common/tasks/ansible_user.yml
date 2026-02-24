@@ -7,7 +7,7 @@
   ansible.builtin.stat:
     path: "{{ lookup('env', 'HOME') }}/.ssh/ansible.pub"
   delegate_to: localhost
-  register: ansible_ssh_key
+  register: common_ansible_ssh_key
   become: false
 
 - name: Copy ssh key to remote host
@@ -15,12 +15,12 @@
     user: ansible
     state: present
     key: "{{ lookup('file', '~/.ssh/ansible.pub') }}"
-  when: ansible_ssh_key.stat.exists
+  when: common_ansible_ssh_key.stat.exists
 
 - name: Warn if ansible SSH key is missing
   ansible.builtin.debug:
     msg: "WARNING: ~/.ssh/ansible.pub not found. Skipping key installation for ansible user."
-  when: not ansible_ssh_key.stat.exists
+  when: not common_ansible_ssh_key.stat.exists
 
 - name: Make ansible a sudoer
   ansible.builtin.copy:

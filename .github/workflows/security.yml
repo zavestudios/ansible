@@ -10,6 +10,10 @@ on:
     - cron: '0 9 * * 1'
   workflow_dispatch:
 
+permissions:
+  contents: read
+  pull-requests: read
+
 jobs:
   secret-scan:
     name: Scan for Secrets
@@ -30,7 +34,12 @@ jobs:
           echo "Scanning for potential exposed passwords and secrets..."
 
           # Check for plaintext passwords in variable files
-          if grep -rin "password.*:.*['\"].*['\"]" --include="*.yml" --include="*.yaml" group_vars/ host_vars/ 2>/dev/null | grep -v "ansible_become_pass" | grep -v "# password" | grep -v "VAULT"; then
+          if grep -rin "password.*:.*['\"].*['\"]" \
+               --include="*.yml" --include="*.yaml" \
+               group_vars/ host_vars/ 2>/dev/null | \
+             grep -v "ansible_become_pass" | \
+             grep -v "# password" | \
+             grep -v "VAULT"; then
             echo "ERROR: Found potential plaintext password in variable files"
             exit 1
           fi
