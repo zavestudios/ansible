@@ -1,4 +1,5 @@
 ---
-nfs_exports: ["/var/cluster_data *(rw,sync,no_root_squash)"]
+# NFS exports - SECURITY: restricted to k3s cluster network with root_squash
+nfs_exports: ["/var/cluster_data 192.168.122.0/24(rw,sync,root_squash,no_subtree_check)"]
 nfs_rpcbind_state: started
 nfs_rpcbind_enabled: true

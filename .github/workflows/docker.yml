@@ -1,0 +1,25 @@
+name: Docker Image
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'Dockerfile'
+      - 'docker-compose.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'Dockerfile'
+      - 'docker-compose.yml'
+  workflow_dispatch:
+
+jobs:
+  build-and-scan:
+    name: Build and Scan Ansible Container
+    uses: zavestudios/platform-pipelines/.github/workflows/image-build.yml@main
+    with:
+      dockerfile: Dockerfile
+      tags: ansible-control:ci
+      push: false
+      platforms: linux/amd64
+      # Don't push to registry - this is for validation only

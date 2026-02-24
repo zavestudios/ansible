@@ -1,0 +1,19 @@
+---
+# Control Plane Node Configuration
+
+# Node role
+node_role: control_plane
+k3s_node_type: server
+
+# Resources
+vcpu: 6
+memory_gb: 10
+disk_gb: 80
+
+# k3s server specific configuration
+k3s_tls_san:
+  - 127.0.0.1
+  - 192.168.122.10
+
+# Services
+k3s_disable_traefik: true

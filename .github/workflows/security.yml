@@ -1,0 +1,76 @@
+name: Security Scanning
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Run weekly on Mondays at 9 AM UTC
+    - cron: '0 9 * * 1'
+  workflow_dispatch:
+
+jobs:
+  secret-scan:
+    name: Scan for Secrets
+    uses: zavestudios/platform-pipelines/.github/workflows/security-scan.yml@main
+    with:
+      fetch_depth: 0  # Scan full history
+
+  ansible-vault-check:
+    name: Verify Ansible Vault Security
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4
+
+      - name: Check for unencrypted secrets in vars
+        run: |
+          echo "Scanning for potential exposed passwords and secrets..."
+
+          # Check for plaintext passwords in variable files
+          if grep -rin "password.*:.*['\"].*['\"]" --include="*.yml" --include="*.yaml" group_vars/ host_vars/ 2>/dev/null | grep -v "ansible_become_pass" | grep -v "# password" | grep -v "VAULT"; then
+            echo "ERROR: Found potential plaintext password in variable files"
+            exit 1
+          fi
+
+          # Check for API keys
+          if grep -rin "api_key.*:.*['\"].*['\"]" --include="*.yml" --include="*.yaml" group_vars/ host_vars/ 2>/dev/null; then
+            echo "ERROR: Found potential plaintext API key"
+            exit 1
+          fi
+
+          echo "✓ No plaintext secrets found in variable files"
+
+      - name: Check for committed private keys
+        run: |
+          echo "Scanning for private keys..."
+
+          if find . -type f \( -name "*_rsa" -o -name "*_dsa" -o -name "*.pem" -o -name "*.key" \) -not -path "./.git/*" | grep -v "roles/common/files/"; then
+            echo "ERROR: Found potential private key files"
+            exit 1
+          fi
+
+          if grep -r "BEGIN.*PRIVATE KEY" --include="*.yml" --include="*.yaml" .; then
+            echo "ERROR: Found private key content in files"
+            exit 1
+          fi
+
+          echo "✓ No private keys found"
+
+      - name: Verify vault files are encrypted
+        run: |
+          echo "Checking that vault files are encrypted..."
+
+          # Find files that look like they should be vaulted
+          if find . -name "*.vault" -o -name "*vault*" -type f | grep -v ".git"; then
+            for file in $(find . -name "*.vault" -o -name "*vault*" -type f | grep -v ".git"); do
+              if ! head -n 1 "$file" | grep -q "ANSIBLE_VAULT"; then
+                echo "ERROR: File $file appears to be unencrypted"
+                exit 1
+              fi
+            done
+          fi
+
+          echo "✓ All vault files properly encrypted"

@@ -1,0 +1,34 @@
+---
+# k3s Cluster Inventory
+# Platform: kubernetes-platform-infrastructure on KVM/libvirt
+# Network: 192.168.122.0/24
+
+all:
+  children:
+    k3s_cluster:
+      children:
+        k3s_control_plane:
+          hosts:
+            k3s-cp-01:
+              ansible_host: 192.168.122.10
+              ansible_user: ubuntu
+
+        k3s_workers:
+          hosts:
+            k3s-worker-01:
+              ansible_host: 192.168.122.11
+              ansible_user: ubuntu
+
+            k3s-worker-02:
+              ansible_host: 192.168.122.12
+              ansible_user: ubuntu
+
+    k3s_bastion:
+      hosts:
+        k3s-bastion-01:
+          ansible_host: 192.168.122.13
+          ansible_user: ubuntu
+      vars:
+        # Bastion-specific variables
+        bastion_role: management
+        install_k8s_tools: true

@@ -1,0 +1,11 @@
+---
+# Worker Node Configuration
+
+# Node role
+node_role: worker
+k3s_node_type: agent
+
+# Resources
+vcpu: 6
+memory_gb: 10
+disk_gb: 80

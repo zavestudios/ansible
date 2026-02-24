@@ -1,0 +1,101 @@
+name: Ansible Quality Checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  ansible-lint:
+    name: Ansible Lint
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@f677139bbe7f9c59b41e40162b753c062f5d49a3 # v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Ansible and ansible-lint
+        run: |
+          python -m pip install --upgrade pip
+          pip install ansible-core>=2.16 ansible-lint>=6.22
+
+      - name: Install required Ansible collections
+        run: |
+          ansible-galaxy collection install -r collections/requirements.yml
+
+      - name: Run ansible-lint
+        run: |
+          ansible-lint --version
+          ansible-lint --force-color --show-relpath
+        continue-on-error: false
+
+  syntax-check:
+    name: Playbook Syntax Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4
+
+      - name: Set up Python
+        uses: actions/setup-python@f677139bbe7f9c59b41e40162b753c062f5d49a3 # v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Ansible
+        run: |
+          python -m pip install --upgrade pip
+          pip install ansible-core>=2.16
+
+      - name: Install required Ansible collections
+        run: |
+          ansible-galaxy collection install -r collections/requirements.yml
+
+      - name: Check playbook syntax
+        run: |
+          for playbook in *.yml; do
+            if [ -f "$playbook" ] && [ "$playbook" != "docker-compose.yml" ]; then
+              echo "Checking syntax for $playbook"
+              ansible-playbook --syntax-check -i inventory/k3s-cluster.yml "$playbook" || exit 1
+            fi
+          done
+          echo "✓ All playbooks passed syntax check"
+
+  inventory-validation:
+    name: Validate Inventory
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4
+
+      - name: Set up Python
+        uses: actions/setup-python@f677139bbe7f9c59b41e40162b753c062f5d49a3 # v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Ansible
+        run: |
+          python -m pip install --upgrade pip
+          pip install ansible-core>=2.16
+
+      - name: Validate inventory structure
+        run: |
+          ansible-inventory -i inventory/k3s-cluster.yml --list > /dev/null
+          echo "✓ Inventory is valid"
+
+      - name: Check for required groups
+        run: |
+          ansible-inventory -i inventory/k3s-cluster.yml --graph | grep -q "k3s_cluster" || (echo "ERROR: k3s_cluster group not found" && exit 1)
+          ansible-inventory -i inventory/k3s-cluster.yml --graph | grep -q "k3s_control_plane" || (echo "ERROR: k3s_control_plane group not found" && exit 1)
+          ansible-inventory -i inventory/k3s-cluster.yml --graph | grep -q "k3s_workers" || (echo "ERROR: k3s_workers group not found" && exit 1)
+          echo "✓ All required groups present"

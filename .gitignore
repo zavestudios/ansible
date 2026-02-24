@@ -60,6 +60,30 @@ docs/docsite/_static/websupport.js
 *.swo
 [._]*.un~
 credentials.yml
+
+# Additional security: vault and secret files
+*.vault
+*vault_password*
+.vault-password
+vault-password.txt
+.ansible-vault-password
+
+# SSH keys and certificates
+*_rsa
+*_rsa.pub
+*.pem
+*.key
+id_rsa*
+id_dsa*
+id_ecdsa*
+id_ed25519*
+
+# Additional credentials patterns
+*credentials*
+*secrets*
+*password*
+*.secret
+
 # test output
 *.retry
 *.out
@@ -125,3 +149,5 @@ test/units/.coverage.*
 changelogs/.plugin-cache.yaml
 .ansible-test-timeout.json
 CLAUDE.md
+AGENTS.md
+SECURITY.md
