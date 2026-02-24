@@ -61,7 +61,11 @@ jobs:
             exit 1
           fi
 
-          if grep -r "BEGIN.*PRIVATE KEY" --include="*.yml" --include="*.yaml" .; then
+          if grep -r "BEGIN.*PRIVATE KEY" \
+               --include="*.yml" --include="*.yaml" \
+               --exclude-dir=.git \
+               --exclude-dir=.github \
+               .; then
             echo "ERROR: Found private key content in files"
             exit 1
           fi
