@@ -1,0 +1,45 @@
+services:
+  ansible:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ansible-control
+    hostname: ansible-control
+    network_mode: host
+    volumes:
+      # Mount the entire ansible directory
+      - .:/ansible:rw
+      # Mount SSH keys from host (read-only)
+      - ${HOME}/.ssh:/root/.ssh:ro
+      # Cache for Ansible facts
+      - ansible-facts:/tmp/ansible_facts
+      # Cache for Ansible collections
+      - ansible-collections:/root/.ansible
+    environment:
+      - ANSIBLE_CONFIG=/ansible/ansible.cfg
+      - ANSIBLE_HOST_KEY_CHECKING=True
+      - ANSIBLE_STDOUT_CALLBACK=yaml
+      - PYTHONUNBUFFERED=1
+    stdin_open: true
+    tty: true
+    working_dir: /ansible
+    command: /bin/bash
+
+  # Optional: ansible-lint service for CI/CD
+  lint:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ansible-lint
+    volumes:
+      - .:/ansible:ro
+    working_dir: /ansible
+    command: ansible-lint
+    profiles:
+      - ci
+
+volumes:
+  ansible-facts:
+    driver: local
+  ansible-collections:
+    driver: local

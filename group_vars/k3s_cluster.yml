@@ -1,0 +1,47 @@
+---
+# Group variables for all k3s cluster nodes (control plane + workers)
+
+# SSH Configuration
+ansible_ssh_private_key_file: ~/.ssh/id_rsa
+ansible_python_interpreter: /usr/bin/python3
+# Note: ansible_become is NOT set here - enable explicitly in playbooks
+
+# Network Configuration
+cluster_network: 192.168.122.0/24
+cluster_gateway: 192.168.122.1
+dns_servers:
+  - 8.8.8.8
+  - 1.1.1.1
+
+# k3s Configuration
+k3s_version: v1.34.3+k3s1
+k3s_api_server: https://192.168.122.10:6443
+
+# System Configuration
+os_family: Debian
+os_distribution: Ubuntu
+os_version: "24.04"
+
+# Update Configuration
+auto_reboot: false
+auto_reboot_time: "03:00"
+update_cache_valid_time: 3600  # 1 hour
+
+# Common packages to install
+common_packages:
+  - curl
+  - wget
+  - git
+  - vim
+  - htop
+  - net-tools
+  - dnsutils
+  - ca-certificates
+
+# NTP Configuration (for common role)
+ntp_enabled: true
+ntp_servers:
+  - 0.ubuntu.pool.ntp.org
+  - 1.ubuntu.pool.ntp.org
+  - 2.ubuntu.pool.ntp.org
+  - 3.ubuntu.pool.ntp.org

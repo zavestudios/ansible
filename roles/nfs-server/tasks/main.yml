@@ -24,7 +24,7 @@
     state: directory
     owner: root
     group: root
-    mode: '777'
+    mode: '0755'  # SECURITY: rwxr-xr-x instead of world-writable 777
   with_items: "{{ nfs_exports }}"
 
 - name: Copy exports file.

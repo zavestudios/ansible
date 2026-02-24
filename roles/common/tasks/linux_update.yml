@@ -1,14 +1,13 @@
-- name: Update CentOS (using yum)
-  ansible.builtin.yum:
+- name: Update CentOS (using package manager)
+  ansible.builtin.package:
     name: '*'
-    state: latest
-    update_only: true
+    state: latest  # noqa: package-latest
   when: ansible_os_family == 'RedHat'
 
 - name: Install a list of packages with a list variable
-  ansible.builtin.yum:
+  ansible.builtin.package:
     name: "{{ common_packages }}"
-    update_only: true
+    state: latest  # noqa: package-latest
   when: ansible_os_family == 'RedHat'
 
 - name: Update Ubuntu (using apt)

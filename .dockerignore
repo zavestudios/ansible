@@ -1,0 +1,39 @@
+# Git
+.git
+.gitignore
+.github
+
+# Documentation
+README.md
+CLAUDE.md
+*.md
+
+# IDE
+.vscode
+.idea
+*.iml
+
+# Python
+__pycache__
+*.py[cod]
+*$py.class
+.pytest_cache
+.tox
+.coverage
+htmlcov
+
+# Ansible runtime
+*.retry
+.ansible
+ansible_collections
+
+# OS
+.DS_Store
+*.swp
+*.swo
+
+# Env
+.env
+.venv
+venv
+env

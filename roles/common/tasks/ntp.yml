@@ -1,11 +1,11 @@
 - name: Allow ntp through firewall
   ansible.builtin.command:
     cmd: firewall-cmd --zone=public --add-port=123/udp --permanent
-  register: fw_output
-  changed_when: fw_ouput.rc != 0
+  register: common_fw_output
+  changed_when: common_fw_output.rc != 0
 
 - name: Reload firewall
   ansible.builtin.command:
     cmd: firewall-cmd --reload
-  register: fw_reload
-  changed_when: fw_reload.rc != 0
+  register: common_fw_reload
+  changed_when: common_fw_reload.rc != 0

@@ -12,6 +12,7 @@
     dest: "/tmp/osquery.deb"
     mode: '0440'
     checksum: "{{ osquery_dpkg_sha }}"
+    validate_certs: true  # SECURITY: Ensure SSL/TLS certificates are validated
   when: osquery_check_deb.rc == 1
 
 - name: Install OSQuery

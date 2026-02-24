@@ -11,8 +11,8 @@
   community.libvirt.virt_net:
     command: get_xml
     name: host-bridge
-  register: host_bridge_xml
+  register: libvirt_host_bridge_xml
 
 - name: Print host-bridge network XML
   ansible.builtin.debug:
-    var: host_bridge_xml
+    var: libvirt_host_bridge_xml

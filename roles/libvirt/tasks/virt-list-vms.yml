@@ -11,8 +11,8 @@
   community.libvirt.virt:
     command: list_vms
     state: running
-  register: running_vms
+  register: libvirt_running_vms
 
 - name: Print list
   ansible.builtin.debug:
-    var: running_vms
+    var: libvirt_running_vms

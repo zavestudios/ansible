@@ -1,0 +1,18 @@
+---
+# Bastion Node Configuration
+
+# Node role
+node_role: bastion
+k3s_node_type: none  # Not part of cluster
+
+# Resources
+vcpu: 2
+memory_gb: 4
+disk_gb: 80
+
+# Tools to install
+k8s_tools:
+  - kubectl
+  - k9s
+  - flux
+  - helm

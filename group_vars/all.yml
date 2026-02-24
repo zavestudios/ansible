@@ -1,0 +1,14 @@
+---
+# Global variables for all hosts
+
+# Default ansible configuration
+ansible_python_interpreter: /usr/bin/python3
+# Note: ansible_become is NOT set globally for security
+# Enable it explicitly in playbooks where needed
+
+# SSH Configuration
+# Host key checking enabled for security - use 'make add-hosts' to populate known_hosts
+
+# Environment
+environment_name: sandbox
+project_name: kubernetes-platform-infrastructure
