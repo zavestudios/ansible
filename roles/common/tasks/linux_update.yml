@@ -1,13 +1,13 @@
 - name: Update CentOS (using package manager)
   ansible.builtin.package:
     name: '*'
-    state: latest
+    state: latest  # noqa: package-latest
   when: ansible_os_family == 'RedHat'
 
 - name: Install a list of packages with a list variable
   ansible.builtin.package:
     name: "{{ common_packages }}"
-    state: latest
+    state: latest  # noqa: package-latest
   when: ansible_os_family == 'RedHat'
 
 - name: Update Ubuntu (using apt)
