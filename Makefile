@@ -1,4 +1,4 @@
-.PHONY: help build up down shell ping update reboot common playbook lint clean install-collections add-hosts
+.PHONY: help build up down shell ping update reboot common playbook lint clean install-collections list-collections add-hosts
 
 # Default target
 .DEFAULT_GOAL := help
@@ -79,6 +79,9 @@ playbook: up ## Run custom playbook (make playbook PLAY=myplaybook.yml ARGS="--c
 # Utility Commands
 install-collections: up ## Install Ansible collections from requirements.yml
 	docker compose exec ansible ansible-galaxy collection install -r collections/requirements.yml
+
+list-collections: up ## List installed Ansible collections
+	docker compose exec ansible ansible-galaxy collection list
 
 lint: ## Run ansible-lint on all playbooks
 	docker compose run --rm lint
