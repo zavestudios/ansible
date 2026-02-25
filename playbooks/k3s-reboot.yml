@@ -7,7 +7,6 @@
 # cluster availability during reboots.
 #
 # Requirements:
-# - kubernetes.core collection (install with: make install-collections)
 # - kubectl configured on bastion (k3s-bastion-01)
 #
 # Use this after system updates that require reboots.
@@ -22,7 +21,7 @@
     # Kubeconfig path on bastion
     kubeconfig_path: /home/ubuntu/.kube/config
     # Drain timeout (how long to wait for pods to terminate gracefully)
-    drain_timeout: 300
+    drain_timeout: 300s
 
   tasks:
     - name: Check if reboot is required
@@ -41,28 +40,25 @@
         - check
 
     - name: Cordon node (mark unschedulable)
-      kubernetes.core.k8s_drain:
-        state: cordon
-        name: "{{ inventory_hostname }}"
-        kubeconfig: "{{ kubeconfig_path }}"
+      ansible.builtin.command:
+        cmd: kubectl cordon {{ inventory_hostname }}
       delegate_to: k3s-bastion-01
+      environment:
+        KUBECONFIG: "{{ kubeconfig_path }}"
       when: reboot_required_file.stat.exists
+      changed_when: true
       tags:
         - reboot
         - drain
 
     - name: Drain node (evict pods)
-      kubernetes.core.k8s_drain:
-        state: drain
-        name: "{{ inventory_hostname }}"
-        delete_options:
-          delete_emptydir_data: true
-          ignore_daemonsets: true
-          force: false
-          timeout: "{{ drain_timeout }}"
-        kubeconfig: "{{ kubeconfig_path }}"
+      ansible.builtin.command:
+        cmd: kubectl drain {{ inventory_hostname }} --ignore-daemonsets --delete-emptydir-data --timeout={{ drain_timeout }}
       delegate_to: k3s-bastion-01
+      environment:
+        KUBECONFIG: "{{ kubeconfig_path }}"
       when: reboot_required_file.stat.exists
+      changed_when: true
       tags:
         - reboot
         - drain
@@ -92,12 +88,13 @@
         - reboot
 
     - name: Uncordon node (mark schedulable)
-      kubernetes.core.k8s_drain:
-        state: uncordon
-        name: "{{ inventory_hostname }}"
-        kubeconfig: "{{ kubeconfig_path }}"
+      ansible.builtin.command:
+        cmd: kubectl uncordon {{ inventory_hostname }}
       delegate_to: k3s-bastion-01
+      environment:
+        KUBECONFIG: "{{ kubeconfig_path }}"
       when: reboot_required_file.stat.exists
+      changed_when: true
       tags:
         - reboot
         - uncordon

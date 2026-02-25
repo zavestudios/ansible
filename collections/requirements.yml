@@ -4,4 +4,3 @@ collections:
   - community.libvirt
   - community.general
   - ansible.posix
-  - kubernetes.core
