@@ -97,5 +97,5 @@ check-reboot: up ## Check if any nodes need reboot
 	docker compose exec ansible ansible k3s_cluster -m command -a "test -f /var/run/reboot-required && echo REBOOT_REQUIRED || echo NO_REBOOT_NEEDED"
 
 k3s-status: up ## Check k3s service status on all nodes
-	docker compose exec ansible ansible k3s_control_plane -m command -a "systemctl status k3s-server --no-pager"
+	docker compose exec ansible ansible k3s_control_plane -m command -a "systemctl status k3s --no-pager"
 	docker compose exec ansible ansible k3s_workers -m command -a "systemctl status k3s-agent --no-pager"
