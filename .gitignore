@@ -151,3 +151,6 @@ changelogs/.plugin-cache.yaml
 CLAUDE.md
 AGENTS.md
 SECURITY.md
+
+# Local bootstrapping scripts (not for adopters)
+scripts/
