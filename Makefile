@@ -1,4 +1,4 @@
-.PHONY: help build up down shell ping update common playbook lint clean install-collections add-hosts
+.PHONY: help build up down shell ping update reboot common playbook lint clean install-collections add-hosts
 
 # Default target
 .DEFAULT_GOAL := help
@@ -50,22 +50,28 @@ add-hosts: ## Add k3s cluster hosts to SSH known_hosts
 
 # Playbook Commands
 update: up ## Run k3s-update.yml playbook
-	docker compose exec ansible ansible-playbook k3s-update.yml $(ARGS)
+	docker compose exec ansible ansible-playbook playbooks/k3s-update.yml $(ARGS)
 
 update-check: up ## Run k3s-update.yml in check mode (dry-run)
-	docker compose exec ansible ansible-playbook k3s-update.yml --check
+	docker compose exec ansible ansible-playbook playbooks/k3s-update.yml --check
 
 update-workers: up ## Update only worker nodes
-	docker compose exec ansible ansible-playbook k3s-update.yml --limit k3s_workers
+	docker compose exec ansible ansible-playbook playbooks/k3s-update.yml --limit k3s_workers
 
 update-cp: up ## Update only control plane
-	docker compose exec ansible ansible-playbook k3s-update.yml --limit k3s_control_plane
+	docker compose exec ansible ansible-playbook playbooks/k3s-update.yml --limit k3s_control_plane
 
 update-bastion: up ## Update only bastion
-	docker compose exec ansible ansible-playbook k3s-update.yml --limit k3s_bastion
+	docker compose exec ansible ansible-playbook playbooks/k3s-update.yml --limit k3s_bastion
+
+reboot: up ## Reboot all nodes that require it (with k8s drain/uncordon)
+	docker compose exec ansible ansible-playbook playbooks/k3s-reboot.yml
+
+reboot-check: up ## Check which nodes need rebooting
+	docker compose exec ansible ansible-playbook playbooks/k3s-reboot.yml --check --tags check
 
 common: up ## Run k3s-common.yml playbook
-	docker compose exec ansible ansible-playbook k3s-common.yml $(ARGS)
+	docker compose exec ansible ansible-playbook playbooks/k3s-common.yml $(ARGS)
 
 playbook: up ## Run custom playbook (make playbook PLAY=myplaybook.yml ARGS="--check")
 	docker compose exec ansible ansible-playbook $(PLAY) $(ARGS)
