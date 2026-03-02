@@ -2,6 +2,12 @@
 
 Ansible repository for managing infrastructure across multiple environments, running in Docker for consistency and portability.
 
+Repository Category: `infrastructure` (see `platform-docs/_platform/REPO_TAXONOMY.md`)
+
+Documentation authority boundary:
+- This repository documents implementation and operations for Ansible-managed infrastructure behavior.
+- Platform governance, lifecycle, and contract doctrine remain authoritative in `platform-docs/_platform/`.
+
 ## Current Setup
 
 ### k3s Cluster Management
