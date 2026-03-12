@@ -1,0 +1,144 @@
+---
+- name: K3s Cluster Performance Diagnostics
+  hosts: k3s_cluster
+  become: true
+  gather_facts: true
+
+  roles:
+    - role: osquery
+      when: ensure_osquery_installed | default(false)
+
+  tasks:
+    - name: Gather system performance metrics using osquery
+      block:
+        - name: Query memory information
+          ansible.builtin.shell: |
+            osqueryi --json 'SELECT * FROM memory_info'
+          register: memory_info
+          changed_when: false
+
+        - name: Query system load average
+          ansible.builtin.shell: |
+            osqueryi --json 'SELECT * FROM load_average'
+          register: load_average
+          changed_when: false
+
+        - name: Query CPU time
+          ansible.builtin.shell: |
+            osqueryi --json 'SELECT * FROM cpu_time'
+          register: cpu_time
+          changed_when: false
+
+        - name: Query top 10 processes by memory
+          ansible.builtin.shell: |
+            osqueryi --json 'SELECT pid, name, ROUND(resident_size / 1024.0 / 1024.0, 2) AS rss_mb, uid, state FROM processes ORDER BY resident_size DESC LIMIT 10'
+          register: top_memory_processes
+          changed_when: false
+
+        - name: Query top 10 processes by CPU
+          ansible.builtin.shell: |
+            osqueryi --json 'SELECT pid, name, ROUND((user_time + system_time) / 1000000.0, 2) AS cpu_seconds, uid, state FROM processes ORDER BY (user_time + system_time) DESC LIMIT 10'
+          register: top_cpu_processes
+          changed_when: false
+
+        - name: Query disk information
+          ansible.builtin.shell: |
+            osqueryi --json 'SELECT device, type, ROUND(blocks_size / 1024.0 / 1024.0 / 1024.0, 2) AS size_gb FROM disk_info'
+          register: disk_info
+          changed_when: false
+
+        - name: Query mount points and usage
+          ansible.builtin.shell: |
+            osqueryi --json 'SELECT device, path, type, ROUND(blocks_size * blocks / 1024.0 / 1024.0 / 1024.0, 2) AS total_gb, ROUND(blocks_size * blocks_free / 1024.0 / 1024.0 / 1024.0, 2) AS free_gb FROM mounts WHERE device NOT LIKE "tmpfs%" AND device NOT LIKE "devtmpfs%"'
+          register: mounts_usage
+          changed_when: false
+
+        - name: Query network interface statistics
+          ansible.builtin.shell: |
+            osqueryi --json 'SELECT interface, ROUND(ibytes / 1024.0 / 1024.0, 2) AS rx_mb, ROUND(obytes / 1024.0 / 1024.0, 2) AS tx_mb, ipackets, opackets, ierrors, oerrors FROM interface_details WHERE interface NOT LIKE "lo"'
+          register: network_stats
+          changed_when: false
+
+        - name: Query system uptime
+          ansible.builtin.shell: |
+            osqueryi --json 'SELECT days, hours, minutes, total_seconds FROM uptime'
+          register: system_uptime
+          changed_when: false
+
+        - name: Query listening ports
+          ansible.builtin.shell: |
+            osqueryi --json 'SELECT DISTINCT port, protocol, processes.name FROM listening_ports JOIN processes USING (pid) WHERE port != 0 ORDER BY port'
+          register: listening_ports
+          changed_when: false
+
+    - name: Save diagnostics to local file
+      block:
+        - name: Create diagnostics output directory
+          ansible.builtin.file:
+            path: "/tmp/k3s-diagnostics"
+            state: directory
+            mode: '0755'
+          delegate_to: localhost
+          run_once: true
+
+        - name: Write diagnostics report
+          ansible.builtin.copy:
+            content: |
+              ================================================================================
+              Performance Diagnostics Report: {{ inventory_hostname }}
+              Generated: {{ ansible_date_time.iso8601 }}
+              ================================================================================
+
+              === SYSTEM INFO ===
+              Hostname: {{ ansible_hostname }}
+              OS: {{ ansible_distribution }} {{ ansible_distribution_version }}
+              Kernel: {{ ansible_kernel }}
+              Architecture: {{ ansible_architecture }}
+
+              === UPTIME ===
+              {{ system_uptime.stdout | from_json | to_nice_json }}
+
+              === LOAD AVERAGE ===
+              {{ load_average.stdout | from_json | to_nice_json }}
+
+              === MEMORY INFO ===
+              {{ memory_info.stdout | from_json | to_nice_json }}
+
+              === CPU TIME ===
+              {{ cpu_time.stdout | from_json | to_nice_json }}
+
+              === TOP 10 PROCESSES BY MEMORY ===
+              {{ top_memory_processes.stdout | from_json | to_nice_json }}
+
+              === TOP 10 PROCESSES BY CPU ===
+              {{ top_cpu_processes.stdout | from_json | to_nice_json }}
+
+              === DISK INFO ===
+              {{ disk_info.stdout | from_json | to_nice_json }}
+
+              === MOUNT POINTS USAGE ===
+              {{ mounts_usage.stdout | from_json | to_nice_json }}
+
+              === NETWORK STATISTICS ===
+              {{ network_stats.stdout | from_json | to_nice_json }}
+
+              === LISTENING PORTS ===
+              {{ listening_ports.stdout | from_json | to_nice_json }}
+
+            dest: "/tmp/k3s-diagnostics/{{ inventory_hostname }}_{{ ansible_date_time.epoch }}.txt"
+            mode: '0644'
+          delegate_to: localhost
+
+    - name: Display summary
+      ansible.builtin.debug:
+        msg:
+          - "========================================="
+          - "Node: {{ inventory_hostname }}"
+          - "========================================="
+          - "Load Average: {{ (load_average.stdout | from_json)[0] }}"
+          - "Memory: {{ (memory_info.stdout | from_json)[0] }}"
+          - ""
+          - "Top Memory Processes:"
+          - "{{ (top_memory_processes.stdout | from_json) | to_nice_yaml }}"
+          - ""
+          - "Diagnostics saved to: /tmp/k3s-diagnostics/{{ inventory_hostname }}_{{ ansible_date_time.epoch }}.txt"
