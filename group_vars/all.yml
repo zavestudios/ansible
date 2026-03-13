@@ -3,11 +3,35 @@
 
 # Default ansible configuration
 ansible_python_interpreter: /usr/bin/python3
+ansible_user: ubuntu
 # Note: ansible_become is NOT set globally for security
 # Enable it explicitly in playbooks where needed
 
-# SSH Configuration
-# Host key checking enabled for security - use 'make add-hosts' to populate known_hosts
+# SSH topology configuration
+#
+# Supported connection modes:
+# - ssh_config: use inventory hostnames with client-side SSH config/host aliases
+# - proxyjump: connect to node IPs through a configured hypervisor jump host
+# - direct: connect directly to node IPs (for running on the hypervisor)
+k3s_connection_mode: ssh_config
+k3s_hypervisor_ssh_host: ""
+k3s_hypervisor_ssh_user: ""
+
+ansible_host: >-
+  {{
+    inventory_hostname
+    if k3s_connection_mode == 'ssh_config'
+    else k3s_node_ip
+  }}
+
+ansible_ssh_common_args: >-
+  {{
+    '-o ProxyJump=' ~ k3s_hypervisor_ssh_user ~ '@' ~ k3s_hypervisor_ssh_host
+    if k3s_connection_mode == 'proxyjump'
+    and k3s_hypervisor_ssh_host | length > 0
+    and k3s_hypervisor_ssh_user | length > 0
+    else ''
+  }}
 
 # Environment
 environment_name: sandbox

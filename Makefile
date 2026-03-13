@@ -1,4 +1,7 @@
-.PHONY: help build up down shell ping update reboot common playbook lint clean install-collections list-collections add-hosts
+.PHONY: help build up down shell exec ping ping-all inventory inventory-list add-hosts \
+	update update-check update-workers update-cp update-bastion reboot reboot-check \
+	common playbook install-collections list-collections lint facts uptime \
+	disk clean rebuild check-reboot k3s-status
 
 # Default target
 .DEFAULT_GOAL := help
@@ -30,16 +33,16 @@ exec: ## Execute command in running container (make exec CMD="ansible --version"
 
 # Ansible Commands
 ping: up ## Test connectivity to all k3s cluster nodes
-	docker compose exec ansible ansible k3s_cluster -m ping
+	docker compose exec ansible ansible k3s_cluster -m ping $(ARGS)
 
 ping-all: up ## Test connectivity to all hosts (including bastion)
-	docker compose exec ansible ansible all -m ping
+	docker compose exec ansible ansible all -m ping $(ARGS)
 
 inventory: up ## Show inventory
-	docker compose exec ansible ansible-inventory --graph
+	docker compose exec ansible ansible-inventory --graph $(ARGS)
 
 inventory-list: up ## Show detailed inventory as JSON
-	docker compose exec ansible ansible-inventory --list
+	docker compose exec ansible ansible-inventory --list $(ARGS)
 
 add-hosts: ## Add k3s cluster hosts to SSH known_hosts
 	@echo "$(CYAN)Adding k3s cluster hosts to known_hosts...$(RESET)"
@@ -87,13 +90,13 @@ lint: ## Run ansible-lint on all playbooks
 	docker compose run --rm lint
 
 facts: up ## Gather facts from all k3s nodes
-	docker compose exec ansible ansible k3s_cluster -m setup
+	docker compose exec ansible ansible k3s_cluster -m setup $(ARGS)
 
 uptime: up ## Check uptime on all k3s nodes
-	docker compose exec ansible ansible k3s_cluster -m command -a "uptime"
+	docker compose exec ansible ansible k3s_cluster -m command -a "uptime" $(ARGS)
 
 disk: up ## Check disk usage on all k3s nodes
-	docker compose exec ansible ansible k3s_cluster -m command -a "df -h"
+	docker compose exec ansible ansible k3s_cluster -m command -a "df -h" $(ARGS)
 
 # Cleanup
 clean: down ## Stop containers and clean up volumes
@@ -103,8 +106,8 @@ rebuild: clean build up ## Rebuild and restart everything
 
 # Quick access to common tasks
 check-reboot: up ## Check if any nodes need reboot
-	docker compose exec ansible ansible k3s_cluster -m command -a "test -f /var/run/reboot-required && echo REBOOT_REQUIRED || echo NO_REBOOT_NEEDED"
+	docker compose exec ansible ansible k3s_cluster -m command -a "test -f /var/run/reboot-required && echo REBOOT_REQUIRED || echo NO_REBOOT_NEEDED" $(ARGS)
 
 k3s-status: up ## Check k3s service status on all nodes
-	docker compose exec ansible ansible k3s_control_plane -m command -a "systemctl status k3s --no-pager"
-	docker compose exec ansible ansible k3s_workers -m command -a "systemctl status k3s-agent --no-pager"
+	docker compose exec ansible ansible k3s_control_plane -m command -a "systemctl status k3s --no-pager" $(ARGS)
+	docker compose exec ansible ansible k3s_workers -m command -a "systemctl status k3s-agent --no-pager" $(ARGS)
