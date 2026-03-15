@@ -116,6 +116,67 @@
       }}
     hypervisor_noncritical_running_vms: "{{ hypervisor_running_vms | difference(hypervisor_critical_guests) | list }}"
 
+- name: Enable autostart for critical guests when explicitly requested
+  ansible.builtin.command:
+    argv:
+      - virsh
+      - -c
+      - "{{ hypervisor_libvirt_uri }}"
+      - autostart
+      - "{{ item }}"
+  loop: "{{ hypervisor_critical_guests_without_autostart }}"
+  register: hypervisor_autostart_enforcement
+  changed_when: true
+  when:
+    - hypervisor_enforce_critical_autostart | bool
+    - hypervisor_critical_guests_without_autostart | length > 0
+
+- name: Refresh critical guest dominfo after autostart enforcement
+  ansible.builtin.command:
+    argv:
+      - virsh
+      - -c
+      - "{{ hypervisor_libvirt_uri }}"
+      - dominfo
+      - "{{ item }}"
+  loop: "{{ hypervisor_critical_guests }}"
+  register: hypervisor_critical_guest_dominfo_post_autostart
+  changed_when: false
+  failed_when: false
+  when: hypervisor_enforce_critical_autostart | bool
+
+- name: Rebuild critical guest summary after autostart enforcement
+  ansible.builtin.set_fact:
+    hypervisor_critical_guest_summary: []
+  when: hypervisor_enforce_critical_autostart | bool
+
+- name: Rebuild critical guest summary from refreshed dominfo
+  ansible.builtin.set_fact:
+    hypervisor_critical_guest_summary: "{{ (hypervisor_critical_guest_summary | default([])) + [guest_summary] }}"
+  vars:
+    guest_state_line: "{{ item.stdout_lines | select('search', '^State:') | list | first | default('State: missing') }}"
+    guest_autostart_line: "{{ item.stdout_lines | select('search', '^Autostart:') | list | first | default('Autostart: missing') }}"
+    guest_summary:
+      name: "{{ item.item }}"
+      present: "{{ item.rc == 0 }}"
+      state: "{{ guest_state_line.split(':', 1)[1] | trim }}"
+      autostart: "{{ guest_autostart_line.split(':', 1)[1] | trim }}"
+  loop: "{{ hypervisor_critical_guest_dominfo_post_autostart.results | default([]) }}"
+  when: hypervisor_enforce_critical_autostart | bool
+
+- name: Recompute hypervisor maintenance follow-up lists after autostart enforcement
+  ansible.builtin.set_fact:
+    hypervisor_critical_guests_without_autostart: >-
+      {{
+        hypervisor_critical_guest_summary
+        | selectattr('present', 'equalto', true)
+        | rejectattr('autostart', 'equalto', 'enable')
+        | map(attribute='name')
+        | list
+      }}
+    hypervisor_noncritical_running_vms: "{{ hypervisor_running_vms | difference(hypervisor_critical_guests) | list }}"
+  when: hypervisor_enforce_critical_autostart | bool
+
 - name: Report hypervisor maintenance summary
   ansible.builtin.debug:
     msg:
@@ -129,6 +190,7 @@
       - "All defined guests: {{ hypervisor_defined_vms | join(', ') if hypervisor_defined_vms else 'none' }}"
       - "Critical guests without autostart: {{ hypervisor_critical_guests_without_autostart | join(', ') if hypervisor_critical_guests_without_autostart else 'none' }}"
       - "Non-critical running guests: {{ hypervisor_noncritical_running_vms | join(', ') if hypervisor_noncritical_running_vms else 'none' }}"
+      - "Autostart enforcement requested: {{ hypervisor_enforce_critical_autostart | bool }}"
 
 - name: Report temperature output
   ansible.builtin.debug:
@@ -157,3 +219,15 @@
           if hypervisor_critical_guests_without_autostart
           else 'Critical guest autostart state already matches the maintenance expectation'
         }}
+
+- name: Report Run manually by human Kubernetes outage checkpoints
+  ansible.builtin.debug:
+    msg:
+      - "Run manually by human: confirm an acceptable full-cluster outage window before hypervisor maintenance"
+      - "Run manually by human: review sensitive workloads and scale down or quiesce anything that should not ride through a full cluster outage"
+      - "Run manually by human on k3s-bastion-01: kubectl get nodes"
+      - "Run manually by human on k3s-bastion-01: kubectl get pods -A"
+      - "Run manually by human: verify the cluster is in a stable state before shutting down guests"
+      - "Run manually by human after hypervisor recovery on k3s-bastion-01: kubectl get nodes"
+      - "Run manually by human after hypervisor recovery on k3s-bastion-01: kubectl get pods -A"
+      - "Run manually by human: verify critical workloads are healthy after the full-cluster outage"

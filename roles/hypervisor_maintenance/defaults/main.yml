@@ -18,3 +18,4 @@ hypervisor_startup_sequence:
   - k3s-worker-02
 
 hypervisor_libvirt_uri: qemu:///system
+hypervisor_enforce_critical_autostart: false

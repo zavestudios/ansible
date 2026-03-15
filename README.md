@@ -124,6 +124,7 @@ Run `make help` to see all available commands:
 - `make check-reboot` - Check if any nodes need reboot
 - `make k3s-status` - Check k3s service status
 - `make hypervisor-report` - Gather pre-maintenance facts from `zlab`
+- `make hypervisor-autostart` - Enable autostart for critical hypervisor guests
 
 ### Development
 - `make lint` - Run ansible-lint on all playbooks
@@ -207,6 +208,9 @@ The diagnostics playbook is host-side only. It reports uptime, CPU count, load a
 ```bash
 # Gather host and libvirt pre-maintenance facts from zlab
 make hypervisor-report
+
+# Explicitly enable autostart for critical guests
+make hypervisor-autostart
 ```
 
 The hypervisor maintenance report is inspection-only. It summarizes reboot-required state, load, memory, swap, temperature output, defined and running guests, critical guest autostart state, libvirt networks, and storage pools.
@@ -215,6 +219,9 @@ It also reports:
 - critical guests that are still missing `autostart`
 - non-critical guests that are still running
 - recommended shutdown and startup order for a planned hypervisor maintenance window
+- manual-human Kubernetes outage checkpoints for a full hypervisor reboot
+
+`make hypervisor-autostart` is the explicit mutation path. It enables `autostart` for the critical guests listed in the role defaults and then refreshes the report so you can verify the new state.
 
 ### Running Ad-hoc Commands
 
