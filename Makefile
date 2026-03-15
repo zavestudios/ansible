@@ -99,6 +99,12 @@ uptime: up ## Check uptime on all k3s nodes
 disk: up ## Check disk usage on all k3s nodes
 	docker compose exec ansible ansible k3s_cluster -m command -a "df -h" $(ARGS)
 
+perf-diag: up ## Gather comprehensive performance diagnostics using osquery
+	docker compose exec ansible ansible-playbook playbooks/k3s-performance-diagnostics.yml
+	@echo ""
+	@echo "Diagnostics saved to /tmp/k3s-diagnostics/"
+	@ls -lh /tmp/k3s-diagnostics/
+
 # Cleanup
 clean: down ## Stop containers and clean up volumes
 	docker compose down -v

@@ -361,6 +361,40 @@ make lint
 docker compose run --rm lint
 ```
 
+## Performance Diagnostics
+
+The `k3s-performance-diagnostics.yml` playbook uses osquery to gather comprehensive performance metrics from all cluster nodes.
+
+### What it collects:
+- **Memory**: Total, free, used, buffers, cached
+- **CPU**: Load average, CPU time per core
+- **Processes**: Top 10 by memory and CPU usage
+- **Disk**: Disk info, mount points, usage statistics
+- **Network**: Interface statistics, bytes/packets transferred
+- **Ports**: All listening ports with associated processes
+- **Uptime**: System uptime and boot time
+
+### Usage:
+```bash
+make perf-diag
+```
+
+### Output:
+Diagnostics are saved to `/tmp/k3s-diagnostics/` with detailed reports for each node:
+```
+/tmp/k3s-diagnostics/k3s-cp-01_1234567890.txt
+/tmp/k3s-diagnostics/k3s-worker-01_1234567890.txt
+/tmp/k3s-diagnostics/k3s-worker-02_1234567890.txt
+```
+
+Each report contains JSON-formatted osquery results for analysis.
+
+### Use Cases:
+- Investigating cluster performance issues
+- Baseline performance documentation
+- Capacity planning
+- Troubleshooting slow pod startups or application performance
+
 ## Other Playbooks
 
 See individual playbook files for other configurations:
