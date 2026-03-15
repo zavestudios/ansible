@@ -1,21 +1,21 @@
 ---
-hypervisor_critical_guests:
+hypervisor_maintenance_critical_guests:
   - k3s-cp-01
   - k3s-bastion-01
   - k3s-worker-01
   - k3s-worker-02
 
-hypervisor_shutdown_sequence:
+hypervisor_maintenance_shutdown_sequence:
   - k3s-worker-01
   - k3s-worker-02
   - k3s-cp-01
   - k3s-bastion-01
 
-hypervisor_startup_sequence:
+hypervisor_maintenance_startup_sequence:
   - k3s-cp-01
   - k3s-bastion-01
   - k3s-worker-01
   - k3s-worker-02
 
-hypervisor_libvirt_uri: qemu:///system
-hypervisor_enforce_critical_autostart: false
+hypervisor_maintenance_libvirt_uri: qemu:///system
+hypervisor_maintenance_enforce_critical_autostart: false

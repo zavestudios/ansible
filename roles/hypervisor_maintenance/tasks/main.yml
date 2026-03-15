@@ -2,7 +2,7 @@
 - name: Check whether the hypervisor requires a reboot
   ansible.builtin.stat:
     path: /var/run/reboot-required
-  register: hypervisor_reboot_required_file
+  register: hypervisor_maintenance_reboot_required_file
 
 - name: Capture temperature output if available
   ansible.builtin.shell: |
@@ -24,7 +24,7 @@
     fi
   args:
     executable: /bin/bash
-  register: hypervisor_temperature
+  register: hypervisor_maintenance_temperature
   changed_when: false
 
 - name: List all defined virtual machines
@@ -32,11 +32,11 @@
     argv:
       - virsh
       - -c
-      - "{{ hypervisor_libvirt_uri }}"
+      - "{{ hypervisor_maintenance_libvirt_uri }}"
       - list
       - --all
       - --name
-  register: hypervisor_defined_vms_raw
+  register: hypervisor_maintenance_defined_vms_raw
   changed_when: false
 
 - name: List all running virtual machines
@@ -44,11 +44,11 @@
     argv:
       - virsh
       - -c
-      - "{{ hypervisor_libvirt_uri }}"
+      - "{{ hypervisor_maintenance_libvirt_uri }}"
       - list
       - --state-running
       - --name
-  register: hypervisor_running_vms_raw
+  register: hypervisor_maintenance_running_vms_raw
   changed_when: false
 
 - name: List libvirt networks
@@ -56,10 +56,10 @@
     argv:
       - virsh
       - -c
-      - "{{ hypervisor_libvirt_uri }}"
+      - "{{ hypervisor_maintenance_libvirt_uri }}"
       - net-list
       - --all
-  register: hypervisor_networks
+  register: hypervisor_maintenance_networks
   changed_when: false
 
 - name: List libvirt storage pools
@@ -67,10 +67,10 @@
     argv:
       - virsh
       - -c
-      - "{{ hypervisor_libvirt_uri }}"
+      - "{{ hypervisor_maintenance_libvirt_uri }}"
       - pool-list
       - --all
-  register: hypervisor_pools
+  register: hypervisor_maintenance_pools
   changed_when: false
 
 - name: Gather dominfo for critical guests
@@ -78,145 +78,189 @@
     argv:
       - virsh
       - -c
-      - "{{ hypervisor_libvirt_uri }}"
+      - "{{ hypervisor_maintenance_libvirt_uri }}"
       - dominfo
       - "{{ item }}"
-  loop: "{{ hypervisor_critical_guests }}"
-  register: hypervisor_critical_guest_dominfo
+  loop: "{{ hypervisor_maintenance_critical_guests }}"
+  register: hypervisor_maintenance_critical_guest_dominfo
   changed_when: false
   failed_when: false
 
 - name: Normalize guest lists
   ansible.builtin.set_fact:
-    hypervisor_defined_vms: "{{ hypervisor_defined_vms_raw.stdout_lines | reject('equalto', '') | list }}"
-    hypervisor_running_vms: "{{ hypervisor_running_vms_raw.stdout_lines | reject('equalto', '') | list }}"
+    hypervisor_maintenance_defined_vms: >-
+      {{ hypervisor_maintenance_defined_vms_raw.stdout_lines | reject('equalto', '') | list }}
+    hypervisor_maintenance_running_vms: >-
+      {{ hypervisor_maintenance_running_vms_raw.stdout_lines | reject('equalto', '') | list }}
 
 - name: Build critical guest summary
   ansible.builtin.set_fact:
-    hypervisor_critical_guest_summary: "{{ (hypervisor_critical_guest_summary | default([])) + [guest_summary] }}"
+    hypervisor_maintenance_critical_guest_summary: >-
+      {{ (hypervisor_maintenance_critical_guest_summary | default([])) + [guest_summary] }}
   vars:
-    guest_state_line: "{{ item.stdout_lines | select('search', '^State:') | list | first | default('State: missing') }}"
-    guest_autostart_line: "{{ item.stdout_lines | select('search', '^Autostart:') | list | first | default('Autostart: missing') }}"
+    hypervisor_maintenance_guest_state_line: >-
+      {{ item.stdout_lines | select('search', '^State:') | list | first | default('State: missing') }}
+    hypervisor_maintenance_guest_autostart_line: >-
+      {{ item.stdout_lines | select('search', '^Autostart:') | list | first | default('Autostart: missing') }}
     guest_summary:
       name: "{{ item.item }}"
       present: "{{ item.rc == 0 }}"
-      state: "{{ guest_state_line.split(':', 1)[1] | trim }}"
-      autostart: "{{ guest_autostart_line.split(':', 1)[1] | trim }}"
-  loop: "{{ hypervisor_critical_guest_dominfo.results }}"
+      state: "{{ hypervisor_maintenance_guest_state_line.split(':', 1)[1] | trim }}"
+      autostart: "{{ hypervisor_maintenance_guest_autostart_line.split(':', 1)[1] | trim }}"
+  loop: "{{ hypervisor_maintenance_critical_guest_dominfo.results }}"
 
 - name: Derive hypervisor maintenance follow-up lists
   ansible.builtin.set_fact:
-    hypervisor_critical_guests_without_autostart: >-
+    hypervisor_maintenance_critical_guests_without_autostart: >-
       {{
-        hypervisor_critical_guest_summary
+        hypervisor_maintenance_critical_guest_summary
         | selectattr('present', 'equalto', true)
         | rejectattr('autostart', 'equalto', 'enable')
         | map(attribute='name')
         | list
       }}
-    hypervisor_noncritical_running_vms: "{{ hypervisor_running_vms | difference(hypervisor_critical_guests) | list }}"
+    hypervisor_maintenance_noncritical_running_vms: >-
+      {{
+        hypervisor_maintenance_running_vms
+        | difference(hypervisor_maintenance_critical_guests)
+        | list
+      }}
 
 - name: Enable autostart for critical guests when explicitly requested
   ansible.builtin.command:
     argv:
       - virsh
       - -c
-      - "{{ hypervisor_libvirt_uri }}"
+      - "{{ hypervisor_maintenance_libvirt_uri }}"
       - autostart
       - "{{ item }}"
-  loop: "{{ hypervisor_critical_guests_without_autostart }}"
-  register: hypervisor_autostart_enforcement
+  loop: "{{ hypervisor_maintenance_critical_guests_without_autostart }}"
+  register: hypervisor_maintenance_autostart_enforcement
   changed_when: true
   when:
-    - hypervisor_enforce_critical_autostart | bool
-    - hypervisor_critical_guests_without_autostart | length > 0
+    - hypervisor_maintenance_enforce_critical_autostart | bool
+    - hypervisor_maintenance_critical_guests_without_autostart | length > 0
 
 - name: Refresh critical guest dominfo after autostart enforcement
   ansible.builtin.command:
     argv:
       - virsh
       - -c
-      - "{{ hypervisor_libvirt_uri }}"
+      - "{{ hypervisor_maintenance_libvirt_uri }}"
       - dominfo
       - "{{ item }}"
-  loop: "{{ hypervisor_critical_guests }}"
-  register: hypervisor_critical_guest_dominfo_post_autostart
+  loop: "{{ hypervisor_maintenance_critical_guests }}"
+  register: hypervisor_maintenance_critical_guest_dominfo_post_autostart
   changed_when: false
   failed_when: false
-  when: hypervisor_enforce_critical_autostart | bool
+  when: hypervisor_maintenance_enforce_critical_autostart | bool
 
 - name: Rebuild critical guest summary after autostart enforcement
   ansible.builtin.set_fact:
-    hypervisor_critical_guest_summary: []
-  when: hypervisor_enforce_critical_autostart | bool
+    hypervisor_maintenance_critical_guest_summary: []
+  when: hypervisor_maintenance_enforce_critical_autostart | bool
 
 - name: Rebuild critical guest summary from refreshed dominfo
   ansible.builtin.set_fact:
-    hypervisor_critical_guest_summary: "{{ (hypervisor_critical_guest_summary | default([])) + [guest_summary] }}"
+    hypervisor_maintenance_critical_guest_summary: >-
+      {{ (hypervisor_maintenance_critical_guest_summary | default([])) + [guest_summary] }}
   vars:
-    guest_state_line: "{{ item.stdout_lines | select('search', '^State:') | list | first | default('State: missing') }}"
-    guest_autostart_line: "{{ item.stdout_lines | select('search', '^Autostart:') | list | first | default('Autostart: missing') }}"
+    hypervisor_maintenance_guest_state_line: >-
+      {{ item.stdout_lines | select('search', '^State:') | list | first | default('State: missing') }}
+    hypervisor_maintenance_guest_autostart_line: >-
+      {{ item.stdout_lines | select('search', '^Autostart:') | list | first | default('Autostart: missing') }}
     guest_summary:
       name: "{{ item.item }}"
       present: "{{ item.rc == 0 }}"
-      state: "{{ guest_state_line.split(':', 1)[1] | trim }}"
-      autostart: "{{ guest_autostart_line.split(':', 1)[1] | trim }}"
-  loop: "{{ hypervisor_critical_guest_dominfo_post_autostart.results | default([]) }}"
-  when: hypervisor_enforce_critical_autostart | bool
+      state: "{{ hypervisor_maintenance_guest_state_line.split(':', 1)[1] | trim }}"
+      autostart: "{{ hypervisor_maintenance_guest_autostart_line.split(':', 1)[1] | trim }}"
+  loop: "{{ hypervisor_maintenance_critical_guest_dominfo_post_autostart.results | default([]) }}"
+  when: hypervisor_maintenance_enforce_critical_autostart | bool
 
 - name: Recompute hypervisor maintenance follow-up lists after autostart enforcement
   ansible.builtin.set_fact:
-    hypervisor_critical_guests_without_autostart: >-
+    hypervisor_maintenance_critical_guests_without_autostart: >-
       {{
-        hypervisor_critical_guest_summary
+        hypervisor_maintenance_critical_guest_summary
         | selectattr('present', 'equalto', true)
         | rejectattr('autostart', 'equalto', 'enable')
         | map(attribute='name')
         | list
       }}
-    hypervisor_noncritical_running_vms: "{{ hypervisor_running_vms | difference(hypervisor_critical_guests) | list }}"
-  when: hypervisor_enforce_critical_autostart | bool
+    hypervisor_maintenance_noncritical_running_vms: >-
+      {{
+        hypervisor_maintenance_running_vms
+        | difference(hypervisor_maintenance_critical_guests)
+        | list
+      }}
+  when: hypervisor_maintenance_enforce_critical_autostart | bool
 
 - name: Report hypervisor maintenance summary
   ansible.builtin.debug:
     msg:
       - "Hypervisor: {{ inventory_hostname }}"
-      - "Reboot required: {{ hypervisor_reboot_required_file.stat.exists }}"
-      - "Load average (1m, 5m, 15m): {{ ansible_facts['loadavg']['1m'] }}, {{ ansible_facts['loadavg']['5m'] }}, {{ ansible_facts['loadavg']['15m'] }}"
-      - "Memory used: {{ ansible_facts['memory_mb']['real']['used'] }} MiB / {{ ansible_facts['memory_mb']['real']['total'] }} MiB"
-      - "Swap used: {{ ansible_facts['memory_mb']['swap']['used'] }} MiB / {{ ansible_facts['memory_mb']['swap']['total'] }} MiB"
+      - "Reboot required: {{ hypervisor_maintenance_reboot_required_file.stat.exists }}"
+      - >-
+        Load average (1m, 5m, 15m):
+        {{ ansible_facts['loadavg']['1m'] }},
+        {{ ansible_facts['loadavg']['5m'] }},
+        {{ ansible_facts['loadavg']['15m'] }}
+      - >-
+        Memory used: {{ ansible_facts['memory_mb']['real']['used'] }} MiB /
+        {{ ansible_facts['memory_mb']['real']['total'] }} MiB
+      - >-
+        Swap used: {{ ansible_facts['memory_mb']['swap']['used'] }} MiB /
+        {{ ansible_facts['memory_mb']['swap']['total'] }} MiB
       - "Uptime: {{ ansible_facts['uptime_seconds'] }} seconds"
-      - "Running guests: {{ hypervisor_running_vms | join(', ') if hypervisor_running_vms else 'none' }}"
-      - "All defined guests: {{ hypervisor_defined_vms | join(', ') if hypervisor_defined_vms else 'none' }}"
-      - "Critical guests without autostart: {{ hypervisor_critical_guests_without_autostart | join(', ') if hypervisor_critical_guests_without_autostart else 'none' }}"
-      - "Non-critical running guests: {{ hypervisor_noncritical_running_vms | join(', ') if hypervisor_noncritical_running_vms else 'none' }}"
-      - "Autostart enforcement requested: {{ hypervisor_enforce_critical_autostart | bool }}"
+      - >-
+        Running guests:
+        {{ hypervisor_maintenance_running_vms | join(', ')
+           if hypervisor_maintenance_running_vms else 'none' }}
+      - >-
+        All defined guests:
+        {{ hypervisor_maintenance_defined_vms | join(', ')
+           if hypervisor_maintenance_defined_vms else 'none' }}
+      - >-
+        Critical guests without autostart:
+        {{ hypervisor_maintenance_critical_guests_without_autostart | join(', ')
+           if hypervisor_maintenance_critical_guests_without_autostart else 'none' }}
+      - >-
+        Non-critical running guests:
+        {{ hypervisor_maintenance_noncritical_running_vms | join(', ')
+           if hypervisor_maintenance_noncritical_running_vms else 'none' }}
+      - >-
+        Autostart enforcement requested:
+        {{ hypervisor_maintenance_enforce_critical_autostart | bool }}
 
 - name: Report temperature output
   ansible.builtin.debug:
-    msg: "{{ hypervisor_temperature.stdout_lines }}"
+    msg: "{{ hypervisor_maintenance_temperature.stdout_lines }}"
 
 - name: Report critical guest autostart and state
   ansible.builtin.debug:
-    var: hypervisor_critical_guest_summary
+    var: hypervisor_maintenance_critical_guest_summary
 
 - name: Report libvirt networks
   ansible.builtin.debug:
-    msg: "{{ hypervisor_networks.stdout_lines }}"
+    msg: "{{ hypervisor_maintenance_networks.stdout_lines }}"
 
 - name: Report libvirt storage pools
   ansible.builtin.debug:
-    msg: "{{ hypervisor_pools.stdout_lines }}"
+    msg: "{{ hypervisor_maintenance_pools.stdout_lines }}"
 
 - name: Report recommended maintenance sequencing
   ansible.builtin.debug:
     msg:
-      - "Recommended shutdown order: {{ hypervisor_shutdown_sequence | join(' -> ') }}"
-      - "Recommended startup order: {{ hypervisor_startup_sequence | join(' -> ') }}"
+      - >-
+        Recommended shutdown order:
+        {{ hypervisor_maintenance_shutdown_sequence | join(' -> ') }}
+      - >-
+        Recommended startup order:
+        {{ hypervisor_maintenance_startup_sequence | join(' -> ') }}
       - >-
         {{
           'Run manually by human: enable autostart for critical guests before a planned hypervisor reboot'
-          if hypervisor_critical_guests_without_autostart
+          if hypervisor_maintenance_critical_guests_without_autostart
           else 'Critical guest autostart state already matches the maintenance expectation'
         }}
 
