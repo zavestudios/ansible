@@ -1,0 +1,116 @@
+---
+- name: Determine host service names
+  ansible.builtin.set_fact:
+    perf_diag_node_role: >-
+      {{
+        'control_plane' if 'k3s_control_plane' in group_names
+        else 'worker' if 'k3s_workers' in group_names
+        else 'bastion' if 'k3s_bastion' in group_names
+        else node_role | default('unknown')
+      }}
+    perf_diag_k3s_service_name: >-
+      {{
+        'k3s' if 'k3s_control_plane' in group_names
+        else 'k3s-agent' if 'k3s_workers' in group_names
+        else ''
+      }}
+
+- name: Check whether k3s data directory exists
+  ansible.builtin.stat:
+    path: "{{ perf_diag_k3s_data_dir }}"
+  register: perf_diag_k3s_data_dir_stat
+
+- name: Capture uptime
+  ansible.builtin.command: uptime
+  register: perf_diag_uptime
+  changed_when: false
+
+- name: Capture memory usage
+  ansible.builtin.command: free -m
+  register: perf_diag_memory
+  changed_when: false
+
+- name: Capture root filesystem usage
+  ansible.builtin.command:
+    argv:
+      - df
+      - -h
+      - /
+  register: perf_diag_root_disk
+  changed_when: false
+
+- name: Capture k3s data directory usage
+  ansible.builtin.command:
+    argv:
+      - df
+      - -h
+      - "{{ perf_diag_k3s_data_dir }}"
+  register: perf_diag_k3s_disk
+  changed_when: false
+  when: perf_diag_k3s_data_dir_stat.stat.exists
+
+- name: Capture CPU count
+  ansible.builtin.command: nproc
+  register: perf_diag_cpu_count
+  changed_when: false
+
+- name: Capture load average
+  ansible.builtin.command: cat /proc/loadavg
+  register: perf_diag_loadavg
+  changed_when: false
+
+- name: Capture k3s service state
+  ansible.builtin.command:
+    argv:
+      - systemctl
+      - is-active
+      - "{{ perf_diag_k3s_service_name }}"
+  register: perf_diag_k3s_service_active
+  changed_when: false
+  failed_when: false
+  when: perf_diag_k3s_service_name | length > 0
+
+- name: Capture k3s journal tail
+  ansible.builtin.command:
+    argv:
+      - journalctl
+      - -u
+      - "{{ perf_diag_k3s_service_name }}"
+      - -n
+      - "{{ perf_diag_k3s_journal_lines | string }}"
+      - --no-pager
+  register: perf_diag_k3s_journal
+  changed_when: false
+  failed_when: false
+  when: perf_diag_k3s_service_name | length > 0
+
+- name: Display performance diagnostics
+  ansible.builtin.debug:
+    msg:
+      - "Host: {{ inventory_hostname }} ({{ perf_diag_node_role }})"
+      - "Uptime: {{ perf_diag_uptime.stdout }}"
+      - "CPUs: {{ perf_diag_cpu_count.stdout }}"
+      - "Load average: {{ perf_diag_loadavg.stdout }}"
+      - "Memory:\n{{ perf_diag_memory.stdout }}"
+      - "Root disk:\n{{ perf_diag_root_disk.stdout }}"
+      - >-
+        K3s data disk:
+        {{
+          '\n' ~ perf_diag_k3s_disk.stdout
+          if perf_diag_k3s_data_dir_stat.stat.exists
+          else ' directory not present'
+        }}
+      - >-
+        K3s service state:
+        {{
+          perf_diag_k3s_service_active.stdout
+          if perf_diag_k3s_service_name | length > 0
+          else 'not applicable'
+        }}
+      - >-
+        K3s journal tail:
+        {{
+          '\n' ~ perf_diag_k3s_journal.stdout
+          if perf_diag_k3s_service_name | length > 0 and perf_diag_k3s_journal.stdout | length > 0
+          else 'not available'
+        }}

@@ -1,0 +1,7 @@
+---
+# Default behavior for node package maintenance.
+k3s_node_update_cache_valid_time: "{{ update_cache_valid_time | default(3600) }}"
+k3s_node_update_auto_reboot: "{{ auto_reboot | default(false) }}"
+k3s_node_update_reboot_timeout: 600
+k3s_node_update_wait_timeout: 300
+k3s_node_update_wait_delay: 10

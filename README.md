@@ -2,11 +2,11 @@
 
 Ansible repository for managing infrastructure across multiple environments, running in Docker for consistency and portability.
 
-Repository Category: `infrastructure` (see `platform-docs/_platform/REPO_TAXONOMY.md`)
+Repository Category: `infrastructure` (see [platform-docs/_platform/REPO_TAXONOMY.md](https://github.com/zavestudios/platform-docs/blob/main/_platform/REPO_TAXONOMY.md))
 
 Documentation authority boundary:
 - This repository documents implementation and operations for Ansible-managed infrastructure behavior.
-- Platform governance, lifecycle, and contract doctrine remain authoritative in `platform-docs/_platform/`.
+- Platform governance, lifecycle, and contract doctrine remain authoritative in [platform-docs/_platform/](https://github.com/zavestudios/platform-docs/tree/main/_platform).
 
 ## Current Setup
 
@@ -27,8 +27,39 @@ This repository manages the k3s cluster VMs from the `kubernetes-platform-infras
 ## Prerequisites
 
 - Docker and Docker Compose installed
-- SSH key at `~/.ssh/id_rsa` for accessing k3s VMs
-- Network access to 192.168.122.0/24 (libvirt network)
+- k3s VMs already provisioned by [kubernetes-platform-infrastructure/terraform-libvirt](https://github.com/zavestudios/kubernetes-platform-infrastructure/tree/main/terraform-libvirt)
+- A dedicated SSH key for automation, matching the key injected during VM provisioning
+- Update [ansible.cfg](./ansible.cfg) and [group_vars/k3s_cluster.yml](./group_vars/k3s_cluster.yml) if you use a key name other than `~/.ssh/ansible_ed25519`
+- Choose a connection mode that matches where you run Ansible:
+  - `ssh_config` from a laptop or management workstation
+  - `proxyjump` from a laptop without relying on SSH host aliases
+  - `direct` from the hypervisor host
+
+## Execution Environment
+
+This repository supports both laptop-managed and hypervisor-local operation.
+
+- The k3s VMs live on `192.168.122.0/24`, which is a private libvirt network.
+- From a laptop, the canonical path is SSH-based access using the KPI bastion/jump configuration.
+- From the hypervisor, direct access to the node IPs is acceptable.
+- `docker-compose.yml` uses `network_mode: host`, so the container shares the network stack of the machine where you run this repo.
+- The container mounts the host `~/.ssh` directory read-only and expects the configured automation key to already work against the VMs.
+
+### Connection Modes
+
+`ssh_config` is the default and recommended mode when running from a laptop. It uses inventory hostnames such as `k3s-cp-01` and expects your SSH client config to define how to reach them. This aligns with KPI's [config-templates/ssh-config.example](https://github.com/zavestudios/kubernetes-platform-infrastructure/blob/main/config-templates/ssh-config.example).
+
+`proxyjump` is the explicit alternative when you do not want to depend on SSH host aliases:
+
+```bash
+make ping ARGS="-e k3s_connection_mode=proxyjump -e k3s_hypervisor_ssh_user=$USER -e k3s_hypervisor_ssh_host=<hypervisor-ip>"
+```
+
+`direct` is for running on the hypervisor itself, where `192.168.122.0/24` is directly reachable:
+
+```bash
+make ping ARGS="-e k3s_connection_mode=direct"
+```
 
 ## Quick Start
 
@@ -36,20 +67,24 @@ This repository manages the k3s cluster VMs from the `kubernetes-platform-infras
 # 1. Build the Ansible container
 make build
 
-# 2. Add k3s hosts to known_hosts (first time only)
-make add-hosts
+# 2. Configure SSH reachability
+# Laptop path: install KPI ssh config entries for k3s-* hosts
+# Hypervisor path: use direct mode
 
 # 3. Test connectivity to k3s cluster
 make ping
 
-# 4. Update all cluster nodes
+# 4. Or, from hypervisor-local mode:
+make ping ARGS="-e k3s_connection_mode=direct"
+
+# 5. Update all cluster nodes
 make update
 
-# 5. Apply common configuration
+# 6. Apply common configuration
 make common
 ```
 
-**Important:** Run `make add-hosts` before your first connection to securely add SSH host keys. See [SECURITY.md](SECURITY.md) for security hardening details.
+**Important:** `make add-hosts` only applies to `direct` mode. In `ssh_config` mode, follow the KPI SSH config pattern instead.
 
 ## Makefile Commands
 
@@ -63,7 +98,7 @@ Run `make help` to see all available commands:
 - `make rebuild` - Clean rebuild everything
 
 ### Testing & Inventory
-- `make add-hosts` - Add k3s hosts to SSH known_hosts (first time setup)
+- `make add-hosts` - Add k3s hosts to SSH known_hosts for `direct` mode
 - `make ping` - Test connectivity to k3s cluster nodes
 - `make ping-all` - Test connectivity to all hosts (including bastion)
 - `make inventory` - Show inventory graph
@@ -78,6 +113,7 @@ Run `make help` to see all available commands:
 
 ### Configuration
 - `make common` - Apply common role to all k3s nodes
+- `make perf-diag` - Gather host-side performance diagnostics from k3s nodes and bastion
 - `make playbook PLAY=myplaybook.yml` - Run custom playbook
 - `make install-collections` - Install Ansible Galaxy collections
 
@@ -87,7 +123,9 @@ Run `make help` to see all available commands:
 - `make facts` - Gather facts from all nodes
 - `make check-reboot` - Check if any nodes need reboot
 - `make k3s-status` - Check k3s service status
-- `make perf-diag` - Comprehensive performance diagnostics using osquery
+- `make hypervisor-report` - Gather pre-maintenance facts from `zlab`
+- `make hypervisor-autostart` - Enable autostart for critical hypervisor guests
+- `make hypervisor-reboot` - Reboot `zlab` after manual-human outage confirmation
 
 ### Development
 - `make lint` - Run ansible-lint on all playbooks
@@ -101,6 +139,7 @@ Run `make help` to see all available commands:
 ├── Makefile                    # Convenience commands
 ├── ansible.cfg                 # Ansible configuration
 ├── inventory/
+│   ├── hypervisors.yml        # Hypervisor inventory
 │   └── k3s-cluster.yml        # k3s cluster inventory
 ├── group_vars/
 │   ├── all.yml                # Global variables
@@ -112,13 +151,16 @@ Run `make help` to see all available commands:
 │   └── k3s-bastion-01.yml     # Bastion host variables
 ├── roles/                      # Ansible roles
 │   ├── common/                # Base system configuration
+│   ├── perf_diag/             # Host-side performance diagnostics
 │   ├── apache/
 │   ├── nfs-server/
 │   └── ...
-├── k3s-update.yml             # System updates for k3s cluster
-├── k3s-common.yml             # Apply common role to k3s cluster
-├── web-server.yml             # Apache web server playbook
-├── nfs-server.yml             # NFS server playbook
+├── playbooks/
+│   ├── k3s-update.yml         # System updates for k3s cluster
+│   ├── k3s-common.yml         # Apply common role to k3s cluster
+│   ├── perf-diag.yml          # Host-side performance diagnostics
+│   ├── web-server.yml         # Apache web server playbook
+│   └── nfs-server.yml         # NFS server playbook
 └── ...
 ```
 
@@ -147,6 +189,46 @@ make update ARGS="--tags upgrade"
 make update ARGS="--skip-tags reboot"
 ```
 
+### Performance Diagnostics
+
+```bash
+# Gather diagnostics from all k3s nodes and bastion
+make perf-diag
+
+# Limit diagnostics to one or more hosts
+make perf-diag ARGS="--limit k3s-cp-01,k3s-bastion-01"
+
+# Reduce journal output
+make perf-diag ARGS="-e perf_diag_k3s_journal_lines=10"
+```
+
+The diagnostics playbook is host-side only. It reports uptime, CPU count, load average, memory, filesystem usage, and, where applicable, `k3s` or `k3s-agent` service state plus recent journal output. It does not use `kubectl`.
+
+### Hypervisor Maintenance Report
+
+```bash
+# Gather host and libvirt pre-maintenance facts from zlab
+make hypervisor-report
+
+# Explicitly enable autostart for critical guests
+make hypervisor-autostart
+
+# Reboot zlab after manual-human outage confirmation
+make hypervisor-reboot
+```
+
+The hypervisor maintenance report is inspection-only. It summarizes reboot-required state, load, memory, swap, temperature output, defined and running guests, critical guest autostart state, libvirt networks, and storage pools.
+
+It also reports:
+- critical guests that are still missing `autostart`
+- non-critical guests that are still running
+- recommended shutdown and startup order for a planned hypervisor maintenance window
+- manual-human Kubernetes outage checkpoints for a full hypervisor reboot
+
+`make hypervisor-autostart` is the explicit mutation path. It enables `autostart` for the critical guests listed in the role defaults and then refreshes the report so you can verify the new state.
+
+`make hypervisor-reboot` performs the infrastructure reboot step after a manual-human confirmation gate. It does not run `kubectl`; it pauses for manual outage confirmation before reboot and reminds you to run the post-recovery Kubernetes checks afterward.
+
 ### Running Ad-hoc Commands
 
 ```bash
@@ -160,6 +242,13 @@ ansible all -m shell -a "cat /etc/os-release"
 
 # Or from outside:
 make exec CMD="ansible k3s_cluster -m command -a 'uptime'"
+```
+
+Most ad-hoc targets accept `ARGS`, so you can switch connection modes without editing tracked files:
+
+```bash
+make ping ARGS="-e k3s_connection_mode=proxyjump -e k3s_hypervisor_ssh_user=$USER -e k3s_hypervisor_ssh_host=<hypervisor-ip>"
+make facts ARGS="-e k3s_connection_mode=direct"
 ```
 
 ### Custom Playbooks
@@ -178,7 +267,7 @@ ansible-playbook my-custom-playbook.yml --check
 
 ## Configuration Variables
 
-Key variables in `group_vars/k3s_cluster.yml`:
+Key variables in [group_vars/k3s_cluster.yml](./group_vars/k3s_cluster.yml):
 
 - `k3s_version`: v1.34.3+k3s1
 - `k3s_api_server`: https://192.168.122.10:6443
@@ -191,10 +280,16 @@ Key variables in `group_vars/k3s_cluster.yml`:
 
 All nodes use:
 - **User:** ubuntu
-- **Key:** ~/.ssh/id_rsa (mounted from host into container)
+- **Key:** `~/.ssh/ansible_ed25519` by default, unless you override it in [ansible.cfg](./ansible.cfg) and [group_vars/k3s_cluster.yml](./group_vars/k3s_cluster.yml)
 - **Port:** 22 (default)
 
 The container mounts your `~/.ssh` directory as read-only to `/root/.ssh` in the container.
+
+The inventory keeps stable host identities and stores node IPs in host vars. Connection routing is controlled by:
+
+- `k3s_connection_mode`
+- `k3s_hypervisor_ssh_user`
+- `k3s_hypervisor_ssh_host`
 
 ## Safety Features
 
@@ -223,26 +318,25 @@ docker compose logs ansible
 
 ### Can't reach k3s VMs
 ```bash
-# Test from host first
-ping 192.168.122.10
+# Laptop-managed path
+ssh k3s-cp-01 'hostname'
+make ping
 
-# Test from container
-make shell
-ping 192.168.122.10
+# Explicit ProxyJump path
+make ping ARGS="-e k3s_connection_mode=proxyjump -e k3s_hypervisor_ssh_user=$USER -e k3s_hypervisor_ssh_host=<hypervisor-ip>"
 
-# Verify network mode
-docker compose ps
-# Should show "network_mode: host"
+# Hypervisor-local path
+make ping ARGS="-e k3s_connection_mode=direct"
 ```
 
 ### SSH key issues
 ```bash
 # Verify SSH key exists on host
-ls -la ~/.ssh/id_rsa
+ls -la ~/.ssh/ansible_ed25519
 
 # Test SSH manually from container
 make shell
-ssh -i /root/.ssh/id_rsa ubuntu@192.168.122.10
+ssh -i /root/.ssh/ansible_ed25519 ubuntu@192.168.122.10
 ```
 
 ### Collection not found
@@ -321,7 +415,7 @@ pip install ansible
 ansible-galaxy collection install -r collections/requirements.yml
 
 # Run playbooks directly
-ansible-playbook k3s-update.yml
+ansible-playbook playbooks/k3s-update.yml
 ansible k3s_cluster -m ping
 ```
 

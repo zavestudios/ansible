@@ -1,0 +1,6 @@
+---
+- name: Gather hypervisor maintenance report
+  hosts: hypervisors
+  gather_facts: true
+  roles:
+    - hypervisor_maintenance

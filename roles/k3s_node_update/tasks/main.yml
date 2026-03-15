@@ -1,0 +1,81 @@
+---
+- name: Verify package update role is running on Debian hosts
+  ansible.builtin.assert:
+    that:
+      - ansible_facts["os_family"] == "Debian"
+    fail_msg: "k3s_node_update currently supports Debian-family hosts only."
+
+- name: Update apt cache
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: "{{ k3s_node_update_cache_valid_time }}"
+  tags:
+    - update
+    - cache
+
+- name: Upgrade all packages to latest version
+  ansible.builtin.apt:
+    upgrade: dist
+    autoremove: true
+    autoclean: true
+  register: k3s_node_update_apt_upgrade_result
+  tags:
+    - update
+    - upgrade
+
+- name: Check if reboot is required
+  ansible.builtin.stat:
+    path: /var/run/reboot-required
+  register: k3s_node_update_reboot_required_file
+  tags:
+    - update
+    - reboot
+
+- name: Determine whether auto reboot will run
+  ansible.builtin.set_fact:
+    k3s_node_update_should_reboot: >-
+      {{
+        k3s_node_update_reboot_required_file.stat.exists
+        and k3s_node_update_auto_reboot | bool
+      }}
+  tags:
+    - update
+    - reboot
+
+- name: Display reboot requirement status
+  ansible.builtin.debug:
+    msg:
+      - "Reboot required: {{ k3s_node_update_reboot_required_file.stat.exists }}"
+      - "Auto reboot enabled: {{ k3s_node_update_auto_reboot | bool }}"
+      - "Reboot will run now: {{ k3s_node_update_should_reboot | bool }}"
+  tags:
+    - update
+    - reboot
+
+- name: Reboot if required and auto reboot is enabled
+  ansible.builtin.reboot:
+    reboot_timeout: "{{ k3s_node_update_reboot_timeout }}"
+    msg: "Rebooting due to system updates"
+  when: k3s_node_update_should_reboot | bool
+  tags:
+    - update
+    - reboot
+
+- name: Wait for nodes to come back online after auto reboot
+  ansible.builtin.wait_for_connection:
+    timeout: "{{ k3s_node_update_wait_timeout }}"
+    delay: "{{ k3s_node_update_wait_delay }}"
+  when: k3s_node_update_should_reboot | bool
+  tags:
+    - update
+    - reboot
+
+- name: Display update summary
+  ansible.builtin.debug:
+    msg:
+      - "Packages updated: {{ k3s_node_update_apt_upgrade_result.changed }}"
+      - "Reboot required: {{ k3s_node_update_reboot_required_file.stat.exists }}"
+      - "Auto reboot enabled: {{ k3s_node_update_auto_reboot | bool }}"
+      - "Reboot executed: {{ k3s_node_update_should_reboot | bool }}"
+  tags:
+    - update

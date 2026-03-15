@@ -7,7 +7,7 @@
 # cluster availability during reboots.
 #
 # Requirements:
-# - kubectl configured on bastion (k3s-bastion-01)
+# - Run manually by human: cordon/drain/uncordon node from bastion with kubectl
 #
 # Use this after system updates that require reboots.
 
@@ -16,12 +16,6 @@
   gather_facts: false
   become: true
   serial: 1  # Reboot one node at a time to maintain cluster availability
-
-  vars:
-    # Kubeconfig path on bastion
-    kubeconfig_path: /home/ubuntu/.kube/config
-    # Drain timeout (how long to wait for pods to terminate gracefully)
-    drain_timeout: 300s
 
   tasks:
     - name: Check if reboot is required
@@ -39,26 +33,21 @@
         - reboot
         - check
 
-    - name: Cordon node (mark unschedulable)
-      ansible.builtin.command:
-        cmd: kubectl cordon {{ inventory_hostname }}
-      delegate_to: k3s-bastion-01
-      environment:
-        KUBECONFIG: "{{ kubeconfig_path }}"
+    - name: "Run manually by human: cordon and drain node from bastion"
+      ansible.builtin.debug:
+        msg:
+          - "Run manually by human on k3s-bastion-01 before rebooting {{ inventory_hostname }}:"
+          - "kubectl cordon {{ inventory_hostname }}"
+          - "kubectl drain {{ inventory_hostname }} --ignore-daemonsets --delete-emptydir-data --timeout=300s"
       when: reboot_required_file.stat.exists
-      changed_when: true
       tags:
         - reboot
         - drain
 
-    - name: Drain node (evict pods)
-      ansible.builtin.command:
-        cmd: kubectl drain {{ inventory_hostname }} --ignore-daemonsets --delete-emptydir-data --timeout={{ drain_timeout }}
-      delegate_to: k3s-bastion-01
-      environment:
-        KUBECONFIG: "{{ kubeconfig_path }}"
+    - name: Require manual kubectl drain confirmation before reboot
+      ansible.builtin.pause:
+        prompt: "Run manually by human: confirm {{ inventory_hostname }} is cordoned and drained, then press Enter to continue."
       when: reboot_required_file.stat.exists
-      changed_when: true
       tags:
         - reboot
         - drain
@@ -87,30 +76,21 @@
       tags:
         - reboot
 
-    - name: Uncordon node (mark schedulable)
-      ansible.builtin.command:
-        cmd: kubectl uncordon {{ inventory_hostname }}
-      delegate_to: k3s-bastion-01
-      environment:
-        KUBECONFIG: "{{ kubeconfig_path }}"
+    - name: "Run manually by human: uncordon node from bastion"
+      ansible.builtin.debug:
+        msg:
+          - "Run manually by human on k3s-bastion-01 after {{ inventory_hostname }} is back:"
+          - "kubectl uncordon {{ inventory_hostname }}"
+          - "kubectl get node {{ inventory_hostname }}"
       when: reboot_required_file.stat.exists
-      changed_when: true
       tags:
         - reboot
         - uncordon
 
-    - name: Wait for node to be ready in cluster
-      ansible.builtin.command:
-        cmd: kubectl get node {{ inventory_hostname }} -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}'
-      register: node_ready
-      until: node_ready.stdout == "True"
-      retries: 30
-      delay: 10
-      delegate_to: k3s-bastion-01
-      environment:
-        KUBECONFIG: "{{ kubeconfig_path }}"
+    - name: Require manual kubectl readiness verification before moving on
+      ansible.builtin.pause:
+        prompt: "Run manually by human: verify {{ inventory_hostname }} is Ready in the cluster, then press Enter to continue."
       when: reboot_required_file.stat.exists
-      changed_when: false
       tags:
         - reboot
         - verify

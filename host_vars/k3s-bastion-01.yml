@@ -4,6 +4,7 @@
 # Node role
 node_role: bastion
 k3s_node_type: none  # Not part of cluster
+k3s_node_ip: 192.168.122.13
 
 # Resources
 vcpu: 2

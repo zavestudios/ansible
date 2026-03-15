@@ -4,6 +4,7 @@
 # Node role
 node_role: worker
 k3s_node_type: agent
+k3s_node_ip: 192.168.122.11
 
 # Resources
 vcpu: 6
