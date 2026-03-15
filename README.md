@@ -2,11 +2,11 @@
 
 Ansible repository for managing infrastructure across multiple environments, running in Docker for consistency and portability.
 
-Repository Category: `infrastructure` (see `platform-docs/_platform/REPO_TAXONOMY.md`)
+Repository Category: `infrastructure` (see [platform-docs/_platform/REPO_TAXONOMY.md](https://github.com/zavestudios/platform-docs/blob/main/_platform/REPO_TAXONOMY.md))
 
 Documentation authority boundary:
 - This repository documents implementation and operations for Ansible-managed infrastructure behavior.
-- Platform governance, lifecycle, and contract doctrine remain authoritative in `platform-docs/_platform/`.
+- Platform governance, lifecycle, and contract doctrine remain authoritative in [platform-docs/_platform/](https://github.com/zavestudios/platform-docs/tree/main/_platform).
 
 ## Current Setup
 
@@ -27,9 +27,9 @@ This repository manages the k3s cluster VMs from the `kubernetes-platform-infras
 ## Prerequisites
 
 - Docker and Docker Compose installed
-- k3s VMs already provisioned by `kubernetes-platform-infrastructure/terraform-libvirt`
+- k3s VMs already provisioned by [kubernetes-platform-infrastructure/terraform-libvirt](https://github.com/zavestudios/kubernetes-platform-infrastructure/tree/main/terraform-libvirt)
 - A dedicated SSH key for automation, matching the key injected during VM provisioning
-- Update `ansible.cfg` and `group_vars/k3s_cluster.yml` if you use a key name other than `~/.ssh/ansible_ed25519`
+- Update [ansible.cfg](./ansible.cfg) and [group_vars/k3s_cluster.yml](./group_vars/k3s_cluster.yml) if you use a key name other than `~/.ssh/ansible_ed25519`
 - Choose a connection mode that matches where you run Ansible:
   - `ssh_config` from a laptop or management workstation
   - `proxyjump` from a laptop without relying on SSH host aliases
@@ -47,7 +47,7 @@ This repository supports both laptop-managed and hypervisor-local operation.
 
 ### Connection Modes
 
-`ssh_config` is the default and recommended mode when running from a laptop. It uses inventory hostnames such as `k3s-cp-01` and expects your SSH client config to define how to reach them. This aligns with KPI's `config-templates/ssh-config.example`.
+`ssh_config` is the default and recommended mode when running from a laptop. It uses inventory hostnames such as `k3s-cp-01` and expects your SSH client config to define how to reach them. This aligns with KPI's [config-templates/ssh-config.example](https://github.com/zavestudios/kubernetes-platform-infrastructure/blob/main/config-templates/ssh-config.example).
 
 `proxyjump` is the explicit alternative when you do not want to depend on SSH host aliases:
 
@@ -113,6 +113,7 @@ Run `make help` to see all available commands:
 
 ### Configuration
 - `make common` - Apply common role to all k3s nodes
+- `make perf-diag` - Gather host-side performance diagnostics from k3s nodes and bastion
 - `make playbook PLAY=myplaybook.yml` - Run custom playbook
 - `make install-collections` - Install Ansible Galaxy collections
 
@@ -122,6 +123,7 @@ Run `make help` to see all available commands:
 - `make facts` - Gather facts from all nodes
 - `make check-reboot` - Check if any nodes need reboot
 - `make k3s-status` - Check k3s service status
+- `make hypervisor-report` - Gather pre-maintenance facts from `zlab`
 
 ### Development
 - `make lint` - Run ansible-lint on all playbooks
@@ -135,6 +137,7 @@ Run `make help` to see all available commands:
 ├── Makefile                    # Convenience commands
 ├── ansible.cfg                 # Ansible configuration
 ├── inventory/
+│   ├── hypervisors.yml        # Hypervisor inventory
 │   └── k3s-cluster.yml        # k3s cluster inventory
 ├── group_vars/
 │   ├── all.yml                # Global variables
@@ -143,15 +146,18 @@ Run `make help` to see all available commands:
 │   ├── k3s-cp-01.yml          # Control plane host variables
 │   ├── k3s-worker-01.yml      # Worker 1 host variables
 │   ├── k3s-worker-02.yml      # Worker 2 host variables
-│   └── k3s-bastion-01.yml     # Bastion host variables
+│   ├── k3s-bastion-01.yml     # Bastion host variables
+│   └── zlab.yml               # Hypervisor host variables
 ├── roles/                      # Ansible roles
 │   ├── common/                # Base system configuration
+│   ├── perf_diag/             # Host-side performance diagnostics
 │   ├── apache/
 │   ├── nfs-server/
 │   └── ...
 ├── playbooks/
 │   ├── k3s-update.yml         # System updates for k3s cluster
 │   ├── k3s-common.yml         # Apply common role to k3s cluster
+│   ├── perf-diag.yml          # Host-side performance diagnostics
 │   ├── web-server.yml         # Apache web server playbook
 │   └── nfs-server.yml         # NFS server playbook
 └── ...
@@ -181,6 +187,30 @@ make update ARGS="-e update_serial=2 --limit k3s_workers"
 make update ARGS="--tags upgrade"
 make update ARGS="--skip-tags reboot"
 ```
+
+### Performance Diagnostics
+
+```bash
+# Gather diagnostics from all k3s nodes and bastion
+make perf-diag
+
+# Limit diagnostics to one or more hosts
+make perf-diag ARGS="--limit k3s-cp-01,k3s-bastion-01"
+
+# Reduce journal output
+make perf-diag ARGS="-e perf_diag_k3s_journal_lines=10"
+```
+
+The diagnostics playbook is host-side only. It reports uptime, CPU count, load average, memory, filesystem usage, and, where applicable, `k3s` or `k3s-agent` service state plus recent journal output. It does not use `kubectl`.
+
+### Hypervisor Maintenance Report
+
+```bash
+# Gather host and libvirt pre-maintenance facts from zlab
+make hypervisor-report
+```
+
+The hypervisor maintenance report is inspection-only. It summarizes reboot-required state, load, memory, swap, temperature output, defined and running guests, critical guest autostart state, libvirt networks, and storage pools.
 
 ### Running Ad-hoc Commands
 
@@ -220,7 +250,7 @@ ansible-playbook my-custom-playbook.yml --check
 
 ## Configuration Variables
 
-Key variables in `group_vars/k3s_cluster.yml`:
+Key variables in [group_vars/k3s_cluster.yml](./group_vars/k3s_cluster.yml):
 
 - `k3s_version`: v1.34.3+k3s1
 - `k3s_api_server`: https://192.168.122.10:6443
@@ -233,7 +263,7 @@ Key variables in `group_vars/k3s_cluster.yml`:
 
 All nodes use:
 - **User:** ubuntu
-- **Key:** `~/.ssh/ansible_ed25519` by default, unless you override it in `ansible.cfg` and `group_vars/k3s_cluster.yml`
+- **Key:** `~/.ssh/ansible_ed25519` by default, unless you override it in [ansible.cfg](./ansible.cfg) and [group_vars/k3s_cluster.yml](./group_vars/k3s_cluster.yml)
 - **Port:** 22 (default)
 
 The container mounts your `~/.ssh` directory as read-only to `/root/.ssh` in the container.

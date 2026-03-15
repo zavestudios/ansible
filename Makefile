@@ -1,7 +1,7 @@
 .PHONY: help build up down shell exec ping ping-all inventory inventory-list add-hosts \
 	update update-check update-workers update-cp update-bastion reboot reboot-check \
 	common playbook install-collections list-collections lint facts uptime \
-	disk clean rebuild check-reboot k3s-status
+	disk clean rebuild check-reboot k3s-status hypervisor-report
 
 # Default target
 .DEFAULT_GOAL := help
@@ -111,3 +111,6 @@ check-reboot: up ## Check if any nodes need reboot
 k3s-status: up ## Check k3s service status on all nodes
 	docker compose exec ansible ansible k3s_control_plane -m command -a "systemctl status k3s --no-pager" $(ARGS)
 	docker compose exec ansible ansible k3s_workers -m command -a "systemctl status k3s-agent --no-pager" $(ARGS)
+
+hypervisor-report: up ## Gather hypervisor maintenance report for zlab
+	docker compose exec ansible ansible-playbook -i inventory/hypervisors.yml playbooks/hypervisor-maint.yml $(ARGS)

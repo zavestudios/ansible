@@ -1,0 +1,8 @@
+---
+hypervisor_critical_guests:
+  - k3s-cp-01
+  - k3s-bastion-01
+  - k3s-worker-01
+  - k3s-worker-02
+
+hypervisor_libvirt_uri: qemu:///system

@@ -1,0 +1,133 @@
+---
+- name: Check whether the hypervisor requires a reboot
+  ansible.builtin.stat:
+    path: /var/run/reboot-required
+  register: hypervisor_reboot_required_file
+
+- name: Capture temperature output if available
+  ansible.builtin.shell: |
+    set -o pipefail
+    if command -v sensors >/dev/null 2>&1; then
+      sensors
+    elif ls /sys/class/thermal/thermal_zone*/temp >/dev/null 2>&1; then
+      for sensor in /sys/class/thermal/thermal_zone*/temp; do
+        zone_dir="$(dirname "$sensor")"
+        zone_name="$(basename "$zone_dir")"
+        zone_type="$(cat "$zone_dir/type" 2>/dev/null || echo unknown)"
+        raw_temp="$(cat "$sensor")"
+        awk -v zone="$zone_name" -v type="$zone_type" -v raw="$raw_temp" 'BEGIN {
+          printf "%s (%s): %.1f C\n", zone, type, raw / 1000
+        }'
+      done
+    else
+      echo "temperature data unavailable"
+    fi
+  args:
+    executable: /bin/bash
+  register: hypervisor_temperature
+  changed_when: false
+
+- name: List all defined virtual machines
+  ansible.builtin.command:
+    argv:
+      - virsh
+      - -c
+      - "{{ hypervisor_libvirt_uri }}"
+      - list
+      - --all
+      - --name
+  register: hypervisor_defined_vms_raw
+  changed_when: false
+
+- name: List all running virtual machines
+  ansible.builtin.command:
+    argv:
+      - virsh
+      - -c
+      - "{{ hypervisor_libvirt_uri }}"
+      - list
+      - --state-running
+      - --name
+  register: hypervisor_running_vms_raw
+  changed_when: false
+
+- name: List libvirt networks
+  ansible.builtin.command:
+    argv:
+      - virsh
+      - -c
+      - "{{ hypervisor_libvirt_uri }}"
+      - net-list
+      - --all
+  register: hypervisor_networks
+  changed_when: false
+
+- name: List libvirt storage pools
+  ansible.builtin.command:
+    argv:
+      - virsh
+      - -c
+      - "{{ hypervisor_libvirt_uri }}"
+      - pool-list
+      - --all
+  register: hypervisor_pools
+  changed_when: false
+
+- name: Gather dominfo for critical guests
+  ansible.builtin.command:
+    argv:
+      - virsh
+      - -c
+      - "{{ hypervisor_libvirt_uri }}"
+      - dominfo
+      - "{{ item }}"
+  loop: "{{ hypervisor_critical_guests }}"
+  register: hypervisor_critical_guest_dominfo
+  changed_when: false
+  failed_when: false
+
+- name: Normalize guest lists
+  ansible.builtin.set_fact:
+    hypervisor_defined_vms: "{{ hypervisor_defined_vms_raw.stdout_lines | reject('equalto', '') | list }}"
+    hypervisor_running_vms: "{{ hypervisor_running_vms_raw.stdout_lines | reject('equalto', '') | list }}"
+
+- name: Build critical guest summary
+  ansible.builtin.set_fact:
+    hypervisor_critical_guest_summary: "{{ (hypervisor_critical_guest_summary | default([])) + [guest_summary] }}"
+  vars:
+    guest_state_line: "{{ item.stdout_lines | select('search', '^State:') | list | first | default('State: missing') }}"
+    guest_autostart_line: "{{ item.stdout_lines | select('search', '^Autostart:') | list | first | default('Autostart: missing') }}"
+    guest_summary:
+      name: "{{ item.item }}"
+      present: "{{ item.rc == 0 }}"
+      state: "{{ guest_state_line.split(':', 1)[1] | trim }}"
+      autostart: "{{ guest_autostart_line.split(':', 1)[1] | trim }}"
+  loop: "{{ hypervisor_critical_guest_dominfo.results }}"
+
+- name: Report hypervisor maintenance summary
+  ansible.builtin.debug:
+    msg:
+      - "Hypervisor: {{ inventory_hostname }}"
+      - "Reboot required: {{ hypervisor_reboot_required_file.stat.exists }}"
+      - "Load average (1m, 5m, 15m): {{ ansible_facts['loadavg']['1m'] }}, {{ ansible_facts['loadavg']['5m'] }}, {{ ansible_facts['loadavg']['15m'] }}"
+      - "Memory used: {{ ansible_facts['memory_mb']['real']['used'] }} MiB / {{ ansible_facts['memory_mb']['real']['total'] }} MiB"
+      - "Swap used: {{ ansible_facts['memory_mb']['swap']['used'] }} MiB / {{ ansible_facts['memory_mb']['swap']['total'] }} MiB"
+      - "Uptime: {{ ansible_facts['uptime_seconds'] }} seconds"
+      - "Running guests: {{ hypervisor_running_vms | join(', ') if hypervisor_running_vms else 'none' }}"
+      - "All defined guests: {{ hypervisor_defined_vms | join(', ') if hypervisor_defined_vms else 'none' }}"
+
+- name: Report temperature output
+  ansible.builtin.debug:
+    msg: "{{ hypervisor_temperature.stdout_lines }}"
+
+- name: Report critical guest autostart and state
+  ansible.builtin.debug:
+    var: hypervisor_critical_guest_summary
+
+- name: Report libvirt networks
+  ansible.builtin.debug:
+    msg: "{{ hypervisor_networks.stdout_lines }}"
+
+- name: Report libvirt storage pools
+  ansible.builtin.debug:
+    msg: "{{ hypervisor_pools.stdout_lines }}"
