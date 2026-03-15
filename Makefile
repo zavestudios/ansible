@@ -1,7 +1,8 @@
 .PHONY: help build up down shell exec ping ping-all inventory inventory-list add-hosts \
 	update update-check update-workers update-cp update-bastion reboot reboot-check \
 	common playbook install-collections list-collections lint facts uptime \
-	disk clean rebuild check-reboot k3s-status hypervisor-report hypervisor-autostart
+	disk clean rebuild check-reboot k3s-status hypervisor-report hypervisor-autostart \
+	hypervisor-reboot
 
 # Default target
 .DEFAULT_GOAL := help
@@ -117,3 +118,6 @@ hypervisor-report: up ## Gather hypervisor maintenance report for zlab
 
 hypervisor-autostart: up ## Enable autostart for critical hypervisor guests
 	docker compose exec ansible ansible-playbook -i inventory/hypervisors.yml playbooks/hypervisor-maint.yml -e hypervisor_enforce_critical_autostart=true $(ARGS)
+
+hypervisor-reboot: up ## Reboot hypervisors after manual-human outage checks
+	docker compose exec ansible ansible-playbook -i inventory/hypervisors.yml playbooks/hypervisor-reboot.yml $(ARGS)

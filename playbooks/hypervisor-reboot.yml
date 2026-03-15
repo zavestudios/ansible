@@ -1,0 +1,36 @@
+---
+- name: Reboot hypervisors after manual-human outage checks
+  hosts: hypervisors
+  gather_facts: false
+  become: true
+
+  tasks:
+    - name: "Run manually by human: confirm Kubernetes outage checks are complete"
+      ansible.builtin.pause:
+        prompt: >-
+          Run manually by human: confirm the Kubernetes outage window is acceptable
+          and pre-reboot checks on k3s-bastion-01 are complete, then press Enter
+          to continue with hypervisor reboot.
+
+    - name: Reboot the hypervisor
+      ansible.builtin.reboot:
+        reboot_timeout: 900
+        msg: "Rebooting {{ inventory_hostname }} for planned hypervisor maintenance"
+        pre_reboot_delay: 5
+        post_reboot_delay: 20
+
+    - name: Wait for hypervisor to come back online
+      ansible.builtin.wait_for_connection:
+        timeout: 600
+        delay: 10
+
+    - name: Verify hypervisor is responsive
+      ansible.builtin.ping:
+
+    - name: "Run manually by human: perform Kubernetes post-recovery checks"
+      ansible.builtin.debug:
+        msg:
+          - "Run manually by human on k3s-bastion-01 after hypervisor recovery:"
+          - "kubectl get nodes"
+          - "kubectl get pods -A"
+          - "Verify critical workloads are healthy after the full-cluster outage"
