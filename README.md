@@ -146,8 +146,7 @@ Run `make help` to see all available commands:
 │   ├── k3s-cp-01.yml          # Control plane host variables
 │   ├── k3s-worker-01.yml      # Worker 1 host variables
 │   ├── k3s-worker-02.yml      # Worker 2 host variables
-│   ├── k3s-bastion-01.yml     # Bastion host variables
-│   └── zlab.yml               # Hypervisor host variables
+│   └── k3s-bastion-01.yml     # Bastion host variables
 ├── roles/                      # Ansible roles
 │   ├── common/                # Base system configuration
 │   ├── perf_diag/             # Host-side performance diagnostics
@@ -211,6 +210,11 @@ make hypervisor-report
 ```
 
 The hypervisor maintenance report is inspection-only. It summarizes reboot-required state, load, memory, swap, temperature output, defined and running guests, critical guest autostart state, libvirt networks, and storage pools.
+
+It also reports:
+- critical guests that are still missing `autostart`
+- non-critical guests that are still running
+- recommended shutdown and startup order for a planned hypervisor maintenance window
 
 ### Running Ad-hoc Commands
 

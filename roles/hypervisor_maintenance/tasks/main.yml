@@ -104,6 +104,18 @@
       autostart: "{{ guest_autostart_line.split(':', 1)[1] | trim }}"
   loop: "{{ hypervisor_critical_guest_dominfo.results }}"
 
+- name: Derive hypervisor maintenance follow-up lists
+  ansible.builtin.set_fact:
+    hypervisor_critical_guests_without_autostart: >-
+      {{
+        hypervisor_critical_guest_summary
+        | selectattr('present', 'equalto', true)
+        | rejectattr('autostart', 'equalto', 'enable')
+        | map(attribute='name')
+        | list
+      }}
+    hypervisor_noncritical_running_vms: "{{ hypervisor_running_vms | difference(hypervisor_critical_guests) | list }}"
+
 - name: Report hypervisor maintenance summary
   ansible.builtin.debug:
     msg:
@@ -115,6 +127,8 @@
       - "Uptime: {{ ansible_facts['uptime_seconds'] }} seconds"
       - "Running guests: {{ hypervisor_running_vms | join(', ') if hypervisor_running_vms else 'none' }}"
       - "All defined guests: {{ hypervisor_defined_vms | join(', ') if hypervisor_defined_vms else 'none' }}"
+      - "Critical guests without autostart: {{ hypervisor_critical_guests_without_autostart | join(', ') if hypervisor_critical_guests_without_autostart else 'none' }}"
+      - "Non-critical running guests: {{ hypervisor_noncritical_running_vms | join(', ') if hypervisor_noncritical_running_vms else 'none' }}"
 
 - name: Report temperature output
   ansible.builtin.debug:
@@ -131,3 +145,15 @@
 - name: Report libvirt storage pools
   ansible.builtin.debug:
     msg: "{{ hypervisor_pools.stdout_lines }}"
+
+- name: Report recommended maintenance sequencing
+  ansible.builtin.debug:
+    msg:
+      - "Recommended shutdown order: {{ hypervisor_shutdown_sequence | join(' -> ') }}"
+      - "Recommended startup order: {{ hypervisor_startup_sequence | join(' -> ') }}"
+      - >-
+        {{
+          'Run manually by human: enable autostart for critical guests before a planned hypervisor reboot'
+          if hypervisor_critical_guests_without_autostart
+          else 'Critical guest autostart state already matches the maintenance expectation'
+        }}
