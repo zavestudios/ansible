@@ -31,9 +31,23 @@
     - update
     - reboot
 
+- name: Determine whether auto reboot will run
+  ansible.builtin.set_fact:
+    k3s_node_update_should_reboot: >-
+      {{
+        k3s_node_update_reboot_required_file.stat.exists
+        and k3s_node_update_auto_reboot | bool
+      }}
+  tags:
+    - update
+    - reboot
+
 - name: Display reboot requirement status
   ansible.builtin.debug:
-    msg: "Reboot required: {{ k3s_node_update_reboot_required_file.stat.exists }}"
+    msg:
+      - "Reboot required: {{ k3s_node_update_reboot_required_file.stat.exists }}"
+      - "Auto reboot enabled: {{ k3s_node_update_auto_reboot | bool }}"
+      - "Reboot will run now: {{ k3s_node_update_should_reboot | bool }}"
   tags:
     - update
     - reboot
@@ -42,20 +56,16 @@
   ansible.builtin.reboot:
     reboot_timeout: "{{ k3s_node_update_reboot_timeout }}"
     msg: "Rebooting due to system updates"
-  when:
-    - k3s_node_update_reboot_required_file.stat.exists
-    - k3s_node_update_auto_reboot | bool
+  when: k3s_node_update_should_reboot | bool
   tags:
     - update
     - reboot
 
-- name: Wait for nodes to come back online
+- name: Wait for nodes to come back online after auto reboot
   ansible.builtin.wait_for_connection:
     timeout: "{{ k3s_node_update_wait_timeout }}"
     delay: "{{ k3s_node_update_wait_delay }}"
-  when:
-    - k3s_node_update_reboot_required_file.stat.exists
-    - k3s_node_update_auto_reboot | bool
+  when: k3s_node_update_should_reboot | bool
   tags:
     - update
     - reboot
@@ -65,6 +75,7 @@
     msg:
       - "Packages updated: {{ k3s_node_update_apt_upgrade_result.changed }}"
       - "Reboot required: {{ k3s_node_update_reboot_required_file.stat.exists }}"
-      - "Auto reboot: {{ k3s_node_update_auto_reboot }}"
+      - "Auto reboot enabled: {{ k3s_node_update_auto_reboot | bool }}"
+      - "Reboot executed: {{ k3s_node_update_should_reboot | bool }}"
   tags:
     - update
