@@ -14,7 +14,7 @@ RUN apt-get update && \
 
 # Install Ansible and dependencies
 RUN pip install --no-cache-dir \
-    ansible>=9.0.0 \
+    "ansible>=9.0.0" \
     ansible-lint \
     jmespath \
     netaddr
