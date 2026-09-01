@@ -16,10 +16,15 @@ on:
 jobs:
   build-and-scan:
     name: Build and Scan Ansible Container
-    uses: zavestudios/platform-pipelines/.github/workflows/image-build.yml@main
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    uses: zavestudios/platform-pipelines/.github/workflows/container-build.yml@95dc3be12e3915599f3f1b99c75864d4c8742c7e
     with:
+      image_name: zavestudios/ansible
       dockerfile: Dockerfile
-      tags: ansible-control:ci
       push: false
       platforms: linux/amd64
-      # Don't push to registry - this is for validation only
+    secrets:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

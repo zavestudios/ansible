@@ -7,6 +7,9 @@ on:
     branches: [main]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   ansible-lint:
     name: Ansible Lint
@@ -14,19 +17,20 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Set up Python
-        uses: actions/setup-python@f677139bbe7f9c59b41e40162b753c062f5d49a3 # v5
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: '3.12'
 
       - name: Install Ansible and ansible-lint
         run: |
           python -m pip install --upgrade pip
-          pip install ansible-core>=2.16 ansible-lint>=6.22
+          pip install 'ansible-core>=2.16' 'ansible-lint>=6.22'
 
       - name: Install required Ansible collections
         run: |
@@ -44,17 +48,19 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Set up Python
-        uses: actions/setup-python@f677139bbe7f9c59b41e40162b753c062f5d49a3 # v5
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: '3.12'
 
       - name: Install Ansible
         run: |
           python -m pip install --upgrade pip
-          pip install ansible-core>=2.16
+          pip install 'ansible-core>=2.16'
 
       - name: Install required Ansible collections
         run: |
@@ -62,11 +68,9 @@ jobs:
 
       - name: Check playbook syntax
         run: |
-          for playbook in *.yml; do
-            if [ -f "$playbook" ] && [ "$playbook" != "docker-compose.yml" ]; then
-              echo "Checking syntax for $playbook"
-              ansible-playbook --syntax-check -i inventory/k3s-cluster.yml "$playbook" || exit 1
-            fi
+          for playbook in playbooks/*.yml; do
+            echo "Checking syntax for $playbook"
+            ansible-playbook --syntax-check -i inventory/k3s-cluster.yml "$playbook" || exit 1
           done
           echo "✓ All playbooks passed syntax check"
 
@@ -76,17 +80,19 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Set up Python
-        uses: actions/setup-python@f677139bbe7f9c59b41e40162b753c062f5d49a3 # v5
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: '3.12'
 
       - name: Install Ansible
         run: |
           python -m pip install --upgrade pip
-          pip install ansible-core>=2.16
+          pip install 'ansible-core>=2.16'
 
       - name: Validate inventory structure
         run: |
